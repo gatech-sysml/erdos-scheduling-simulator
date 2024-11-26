@@ -2087,10 +2087,17 @@ class Simulator(object):
                 f"Received no Placements object from the Scheduler at {event.time}.",
             )
 
-        # Calculate the time at which the placements need to be applied.
         placement_time = event.time + placements.runtime
+
         for placement in placements:
-            placement._placement_time = placement_time
+            # If the placement is in the past, update it to match
+            # `placement_time`
+            # This scenario happens when the `scheduler_runtime` is non-zero.
+            if placement._placement_time and placement._placement_time < placement_time:
+                self._logger.warning(
+                    f"[{self._simulator_time}] Placement is in the past. Updating placement time from {placement._placement_time} to {placement_time}"
+                )
+                placement._placement_time = placement_time
 
         # Save the placements until the placement time arrives.
         self._last_scheduler_placements = placements
