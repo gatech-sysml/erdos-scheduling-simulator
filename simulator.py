@@ -484,32 +484,10 @@ class Simulator(object):
         This loop requires the `Workload` to be populated with the `TaskGraph`s whose
         execution is to be simulated using the Scheduler.
         """
-        self.__simulate_f(lambda _: True)
-
-    def tick(self, until: EventTime) -> None:
-        """Tick the simulator until the specified time"""
-        self.__simulate_f(should_continue=lambda et: et <= until)
-
-    def __simulate_f(self, should_continue: Callable[[EventTime], bool]) -> None:
-        """Helper function to run the simulator until a predicate is satisfied.
-
-        The predicate (`should_continue`) receives the time of the next event
-        in the queue, using which it can use to decide whether or not to
-        simulate.
-        """
-        # Run the simulator loop.
-        while True:
-            top = self._event_queue.peek()
-            if not top or not should_continue(top.time):
-                break
-
+        def f():
             time_until_next_event = self.__time_until_next_event()
-
-            # If there are any running tasks, step through the execution of the
-            # Simulator until the closest remaining time.
             running_tasks = self._worker_pools.get_placed_tasks()
-
-            if not self._orchestrated and len(running_tasks) > 0:
+            if len(running_tasks) > 0:
                 # There are running tasks, figure out the minimum remaining
                 # time across all the tasks.
                 min_task_remaining_time = min(
@@ -527,30 +505,53 @@ class Simulator(object):
                 # the next event in the queue, step all workers until the
                 # completion of that task, otherwise, handle the next event.
                 if min_task_remaining_time < time_until_next_event:
-                    self.__step(step_size=min_task_remaining_time)
+                    step_size = min_task_remaining_time
                 else:
-                    # NOTE: We step here so that all the Tasks that are going
-                    # to finish as a result of this step have their TASK_FINISHED
-                    # events processed first before any future placement occurs
-                    # that is decided prior.
-                    self.__step(step_size=time_until_next_event)
-                    if self.__handle_event(self._event_queue.next()):
-                        break
+                    step_size = time_until_next_event
             else:
-                # Step until the next event is supposed to be executed.
-                self.__step(step_size=time_until_next_event)
-                if self.__handle_event(self._event_queue.next()):
-                    break
+                step_size = time_until_next_event
+            return step_size
+        self.__simulate_f(should_step=f)
+
+    def tick(self, until: EventTime) -> None:
+        """Tick the simulator until the specified time"""
+        def f():
+            time_until_next_event = self.__time_until_next_event()
+            if time_until_next_event.is_invalid():
+                if until == self._simulator_time:
+                    return None
+                return until - self._simulator_time
+            elif (time_until_next_event + self._simulator_time) <= until:
+                return time_until_next_event
+            else:
+                return None
+        self.__simulate_f(should_step=f)
+
+    def __simulate_f(self, should_step: Callable[[EventTime], bool]) -> None:
+        """TODO doc
+        """
+        # Step the simulator loop.
+        while True:
+            step_size = should_step()
+            if not step_size:
+                break
+            self.__step(step_size=step_size)
+            if self._event_queue.peek() and self.__handle_event(self._event_queue.next()):
+                break
 
     def get_current_placements_for_task_graph(
         self, task_graph_name: str
     ) -> List[Placement]:
         if task_graph_name not in self._current_task_graph_placements:
-            raise ValueError(f"Task graph '{task_graph_name}' does not exist")
+            self._logger.warning(f"Cannot recognize task graph '{task_graph_name}'")
+            return []
         return list(self._current_task_graph_placements[task_graph_name].values())
 
     def __time_until_next_event(self) -> EventTime:
-        return self._event_queue.peek().time - self._simulator_time
+        if self._event_queue.peek():
+            return self._event_queue.peek().time - self._simulator_time
+        else:
+            return EventTime.invalid()
 
     def __handle_scheduler_start(self, event: Event) -> None:
         """Handle the SCHEDULER_START event. The method invokes the scheduler, and adds
