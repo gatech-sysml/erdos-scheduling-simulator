@@ -12,7 +12,15 @@ from dataclasses import dataclass
 import main
 from simulator import Simulator, Event, EventTime, EventType
 from workers import Worker, WorkerPool, WorkerPools
-from workload import Resource, Resources, Workload, TaskGraph, TaskState, Placement
+from workload import (
+    Resource,
+    Resources,
+    Workload,
+    TaskGraph,
+    TaskState,
+    Placement,
+    JobGraph,
+)
 from data import BaseWorkloadLoader
 from data.tpch_loader import TpchLoader
 from utils import setup_logging, setup_csv_logging
@@ -73,12 +81,10 @@ class WorkloadLoader(BaseWorkloadLoader):
         return self._workload
 
 
-# TODO(elton): rename to RegisteredApplication
-# TODO(elton): write documentation on how to use
-
-
 @dataclass
-class RegisteredTaskGraph:
+class RegisteredApplication:
+    # TODO(elton): documentation
+
     gen: any  # TODO(elton): proper type
     task_graph: TaskGraph = None
     stage_id_mapping: any = None  # TODO(elton): proper type
@@ -177,8 +183,8 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         else:
             raise ValueError(f"Unknown scheduler {FLAGS.scheduler}.")
 
-        # TODO: Items in _registered_task_graphs are never deleted right now, needs to be handled.
-        self._registered_task_graphs = {}
+        # TODO: Items in _registered_applications are never deleted right now, needs to be handled.
+        self._registered_applications = {}
         self._registered_app_drivers = (
             {}
         )  # Spark driver id differs from taskgraph name (application id)
@@ -290,7 +296,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
             )
 
         # TODO: Dummy mapping from driver to task graph (application), so task_graph_name is None.
-        # Deletion of taskgraph from registered_task_graphs and driver from registered_app_drivers should be done carefully.
+        # Deletion of taskgraph from registered_applications and driver from registered_app_drivers should be done carefully.
         task_graph_name = self._registered_app_drivers[request.id]
         del self._registered_app_drivers[request.id]
 
@@ -311,7 +317,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                 success=False, message=msg, num_executors=0
             )
 
-        if request.id in self._registered_task_graphs:
+        if request.id in self._registered_applications:
             msg = f"[{stime}] The task graph (id={request.id}, name={request.name}) is already registered"
             self._logger.error(msg)
             return erdos_scheduler_pb2.RegisterTaskGraphResponse(
@@ -345,35 +351,47 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                     }
                 )
 
-            def gen(release_time):
-                # Construct the task graph
-                try:
-                    task_graph, stage_id_mapping = self._data_loaders[
-                        DataLoader.TPCH
-                    ].make_task_graph(
-                        id=request.id,
-                        query_num=query_num,
-                        release_time=release_time,
-                        dependencies=dependencies,
-                        dataset_size=dataset_size,
-                        max_executors_per_job=max_executors_per_job,
-                        runtime_unit=EventTime.Unit.S,
-                    )
-                except Exception as e:
-                    msg = f"[{stime}] Failed to load TPCH query {query_num}. Exception: {e}"
-                    return erdos_scheduler_pb2.RegisterTaskGraphResponse(
-                        success=False, message=msg, num_executors=0
-                    )
+            # Create a job graph
+            try:
+                job_graph, stage_id_mapping = self._data_loaders[
+                    DataLoader.TPCH
+                ].make_job_graph(
+                    id=request.id,
+                    query_num=query_num,
+                    dependencies=dependencies,
+                    dataset_size=dataset_size,
+                    max_executors_per_job=max_executors_per_job,
+                    runtime_unit=EventTime.Unit.S,
+                )
+            except Exception as e:
+                msg = f"[{stime}] Failed to load TPCH query {query_num}. Exception: {e}"
+                self._logger.error(msg)
+                return erdos_scheduler_pb2.RegisterTaskGraphResponse(
+                    success=False, message=msg, num_executors=0
+                )
 
+            if not self.__can_accomodate_task_graph(job_graph):
+                msg = f"[{stime}] The worker Pool cannot accomodate the task graph '{request.id}'"
+                self._logger.error(msg)
+                return erdos_scheduler_pb2.RegisterTaskGraphResponse(
+                    success=False, message=msg, num_executors=0
+                )
+
+            def gen(release_time):
+                task_graph = job_graph.get_next_task_graph(
+                    start_time=release_time,
+                    _flags=FLAGS,
+                )
                 return task_graph, stage_id_mapping
 
         else:
             msg = f"[{stime}] The service only supports TPCH queries"
+            self._logger.error(msg)
             return erdos_scheduler_pb2.RegisterTaskGraphResponse(
                 success=False, message=msg, num_executors=0
             )
 
-        self._registered_task_graphs[request.id] = RegisteredTaskGraph(gen=gen)
+        self._registered_applications[request.id] = RegisteredApplication(gen=gen)
 
         msg = f"[{stime}] Registered task graph '{request.id}' successfully"
         self._logger.info(msg)
@@ -386,7 +404,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
     async def RegisterEnvironmentReady(self, request, context):
         stime = self.__stime()
 
-        if request.id not in self._registered_task_graphs:
+        if request.id not in self._registered_applications:
             msg = f"[{stime}] Task graph of id '{request.id}' is not registered or does not exist"
             self._logger.error(msg)
             return erdos_scheduler_pb2.RegisterEnvironmentReadyResponse(
@@ -394,7 +412,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                 message=msg,
             )
 
-        r = self._registered_task_graphs[request.id]
+        r = self._registered_applications[request.id]
 
         # Generate the task graph now
         r.generate_task_graph(stime)
@@ -470,7 +488,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         stime = self.__stime()
 
         # Check if the task graph is registered
-        if request.id not in self._registered_task_graphs:
+        if request.id not in self._registered_applications:
             msg = f"[{stime}] Task graph with id '{request.id}' is not registered or does not exist"
             self._logger.error(msg)
             return erdos_scheduler_pb2.GetPlacementsResponse(
@@ -478,7 +496,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                 message=msg,
             )
 
-        r = self._registered_task_graphs[request.id]
+        r = self._registered_applications[request.id]
 
         if r.task_graph is None:
             msg = f"[{stime}] Task graph '{request.id}' is not ready"
@@ -550,7 +568,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         stime = self.__stime()
 
         # Check if the task graph is registered
-        if request.application_id not in self._registered_task_graphs:
+        if request.application_id not in self._registered_applications:
             msg = f"[{stime}] Task graph with id '{request.id}' is not registered or does not exist"
             self._logger.error(msg)
             return erdos_scheduler_pb2.NotifyTaskCompletionResponse(
@@ -558,7 +576,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                 message=msg,
             )
 
-        r = self._registered_task_graphs[request.application_id]
+        r = self._registered_applications[request.application_id]
         task = r.task_graph.get_task(r.stage_id_mapping[request.task_id])
         if task is None:
             msg = f"[{stime}] Task '{request.task_id}' does not exist in the task graph '{r.task_graph.name}'"
@@ -643,10 +661,22 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         # Simulator maintains only one worker pool, so this should be fine
         return next(iter(self._simulator._worker_pools.worker_pools))
 
+    def __get_worker(self):
+        return self.__get_worker_pool().workers[0]
+
     def __get_worker_id(self):
         # We return the name here because we register the worker id from
         # Spark as the name of the worker in the worker pool
-        return self.__get_worker_pool().workers[0].name
+        return self.__get_worker().name
+
+    def __can_accomodate_task_graph(self, job_graph: JobGraph):
+        worker_resources = self.__get_worker().resources
+        for job in job_graph:
+            for strat in job.execution_strategies:
+                for resource, quantity in strat.resources.resources:
+                    if worker_resources.get_total_quantity(resource) < quantity:
+                        return False
+        return True
 
 
 async def serve(server):

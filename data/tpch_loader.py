@@ -58,11 +58,10 @@ class TpchLoader:
             query_num = int(query["name"][1:])
             self._graphs[query_num] = query["graph"]
 
-    def make_task_graph(
+    def make_job_graph(
         self,
         id: str,
         query_num: int,
-        release_time: EventTime,
         dependencies: Optional[List[Dict[str, Any]]] = None,
         profile_type: Optional[str] = None,
         dataset_size: Optional[int] = None,
@@ -129,17 +128,11 @@ class TpchLoader:
                     child_job = name_to_job[child]
                     job_graph.add_child(job, child_job)
 
-        # Construct TaskGraph from JobGraph
-        task_graph = job_graph.get_next_task_graph(
-            start_time=release_time,
-            _flags=self._flags,
-        )
-
         self._logger.info(
-            f"Constructed TaskGraph for TPC-H query {query_name(query_num)}."
+            f"Constructed JobGraph for TPC-H query {query_name(query_num)}."
         )
 
-        return task_graph, deps_mapping
+        return job_graph, deps_mapping
 
     def __make_work_profile(
         self,
@@ -385,10 +378,13 @@ class TpchWorkloadLoader(BaseWorkloadLoader):
             return None
 
         for i, (q, t) in enumerate(to_release):
-            task_graph, _ = self._tpch_loader.make_task_graph(
+            job_graph, _ = self._tpch_loader.make_job_graph(
                 id=str(i),
                 query_num=q,
-                release_time=t,
+            )
+            task_graph = job_graph.get_next_task_graph(
+                start_time=t,
+                _flags=self._flags,
             )
             self._workload.add_task_graph(task_graph)
 
