@@ -531,9 +531,20 @@ class Simulator(object):
 
         self.__simulate_f(should_step=f)
 
-    def __simulate_f(self, should_step: Callable[[EventTime], bool]) -> None:
-        """TODO doc"""
-        # Step the simulator loop.
+    def __simulate_f(self, should_step: Callable[None, Optional[EventTime]]) -> None:
+        """Steps the simulator while a predicate is satisfied.
+
+        This method continuously advances the simulation by calling the
+        provided `should_step` function, which determines the size of each
+        simulation step. The simulation continues until `should_step` returns
+        None, indicating that stepping should stop.
+
+        Args:
+            should_step (Callable[[EventTime], bool]):
+                A predicate function that determines the next step size for the simulation.
+                - If the function returns an EventTime value, the simulator steps by that amount.
+                - If the function returns None, the simulation stops.
+        """
         while True:
             step_size = should_step()
             if not step_size:
