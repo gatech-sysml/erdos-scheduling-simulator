@@ -484,6 +484,7 @@ class Simulator(object):
         This loop requires the `Workload` to be populated with the `TaskGraph`s whose
         execution is to be simulated using the Scheduler.
         """
+
         def f():
             time_until_next_event = self.__time_until_next_event()
             running_tasks = self._worker_pools.get_placed_tasks()
@@ -511,10 +512,12 @@ class Simulator(object):
             else:
                 step_size = time_until_next_event
             return step_size
+
         self.__simulate_f(should_step=f)
 
     def tick(self, until: EventTime) -> None:
         """Tick the simulator until the specified time"""
+
         def f():
             time_until_next_event = self.__time_until_next_event()
             if time_until_next_event.is_invalid():
@@ -525,18 +528,20 @@ class Simulator(object):
                 return time_until_next_event
             else:
                 return None
+
         self.__simulate_f(should_step=f)
 
     def __simulate_f(self, should_step: Callable[[EventTime], bool]) -> None:
-        """TODO doc
-        """
+        """TODO doc"""
         # Step the simulator loop.
         while True:
             step_size = should_step()
             if not step_size:
                 break
             self.__step(step_size=step_size)
-            if self._event_queue.peek() and self.__handle_event(self._event_queue.next()):
+            if self._event_queue.peek() and self.__handle_event(
+                self._event_queue.next()
+            ):
                 break
 
     def get_current_placements_for_task_graph(
@@ -713,7 +718,7 @@ class Simulator(object):
                 )
                 self._current_task_graph_placements[placement.task.task_graph][
                     placement.task.id
-                    ] = placement
+                ] = placement
 
             if task_graph.is_cancelled():
                 released_tasks_from_new_task_graph = (
