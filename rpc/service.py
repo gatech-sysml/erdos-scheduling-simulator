@@ -321,8 +321,8 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
     async def RegisterTaskGraph(self, request, context):
         stime = self.__stime()
 
-        if not self.__framework_registered():
-            msg = f"[{stime}] Trying to register a task graph (id={request.id}, name={request.name}) but no framework has been registered yet."
+        if not self.__worker_registered():
+            msg = f"[{stime}] Failed to register task graph (id={request.id}, name={request.name}) because no worker has been registered yet."
             self._logger.error(msg)
             return erdos_scheduler_pb2.RegisterTaskGraphResponse(
                 success=False, message=msg, num_executors=0
@@ -671,6 +671,11 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
 
     def __framework_registered(self):
         return self._simulator is not None
+
+    def __worker_registered(self):
+        return (
+            self.__framework_registered() and len(self.__get_worker_pool().workers) > 0
+        )
 
     def __get_worker_pool(self):
         # Simulator maintains only one worker pool, so this should be fine
