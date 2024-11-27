@@ -382,6 +382,11 @@ class Simulator(object):
         # Is the simulator orchestrated?
         self._orchestrated = _flags.orchestrated
 
+        # Minimum duration by which to push task placements
+        self._min_placement_push_duration = EventTime(
+            _flags.min_placement_push_duration, EventTime.Unit.US
+        )
+
         # Initialize the event queue.
         # To make the system continue working the loop, we add three events:
         # - SIMULATOR_START: A notional event start the simulator and log into the CSV.
@@ -520,14 +525,14 @@ class Simulator(object):
 
         def f():
             time_until_next_event = self.__time_until_next_event()
-            if time_until_next_event.is_invalid():
-                if until == self._simulator_time:
-                    return None
-                return until - self._simulator_time
-            elif (time_until_next_event + self._simulator_time) <= until:
+
+            if (
+                not time_until_next_event.is_invalid()
+                and (time_until_next_event + self._simulator_time) <= until
+            ):
                 return time_until_next_event
-            else:
-                return None
+
+            return None
 
         self.__simulate_f(should_step=f)
 
@@ -982,6 +987,10 @@ class Simulator(object):
                 )
             )
 
+        # NOP if there are no previous placements
+        if self._last_scheduler_placements is None:
+            return
+
         num_placed = count_placed_tasks(self._last_scheduler_placements)
         num_unplaced = count_placed_tasks(self._last_scheduler_placements) - num_placed
         scheduler_runtime = event.time - self._last_scheduler_start_time
@@ -1405,7 +1414,8 @@ class Simulator(object):
                     parent.remaining_time for parent in task_graph.get_parents(task)
                 )
                 next_placement_time = event.time + max(
-                    parent_completion_time, EventTime(1, EventTime.Unit.US)
+                    parent_completion_time,
+                    self._min_placement_push_duration,
                 )
                 next_placement_event = Event(
                     event_type=event.event_type,
@@ -1462,7 +1472,7 @@ class Simulator(object):
                 task.id
             ] = event.placement
         else:
-            next_placement_time = event.time + EventTime(1, EventTime.Unit.US)
+            next_placement_time = event.time + self._min_placement_push_duration
             next_placement_event = Event(
                 event_type=event.event_type,
                 time=next_placement_time,

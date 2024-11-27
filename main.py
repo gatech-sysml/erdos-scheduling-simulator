@@ -121,6 +121,12 @@ flags.DEFINE_bool(
     False,
     "Runs the simulator in orchestrated mode. Currently used by the ERDOS service.",
 )
+flags.DEFINE_integer(
+    "min_placement_push_duration",
+    1,
+    "The duration (in µs) by which to push a task placement if it cannot be"
+    "placed on a worker at its original time",
+)
 
 # Benchmark related flags.
 flags.DEFINE_integer(

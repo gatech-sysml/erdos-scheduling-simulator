@@ -87,8 +87,10 @@ class RegisteredApplication:
 
     gen: any  # TODO(elton): proper type
     task_graph: TaskGraph = None
-    stage_id_mapping: any = None  # TODO(elton): proper type
-    last_gen: any = None  # TODO(elton): proper type
+
+    _forward: any = None  # TODO(elton): proper type
+    _backward: any = None  # TODO(elton): proper type
+    _last_gen: any = None  # TODO(elton): proper type
 
     def __init__(self, gen):
         self.gen = gen
@@ -96,8 +98,15 @@ class RegisteredApplication:
     def generate_task_graph(self, release_time):
         task_graph, stage_id_mapping = self.gen(release_time)
         self.task_graph = task_graph
-        self.stage_id_mapping = stage_id_mapping
-        self.last_gen = release_time
+        self._forward = stage_id_mapping
+        self._backward = {v: k for k, v in self._forward.items()}
+        self._last_gen = release_time
+
+    def spark_task_id(self, task_id):
+        return self._backward[task_id]
+
+    def canonical_task_id(self, task_id):
+        return self._forward[task_id]
 
 
 class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
@@ -218,6 +227,8 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
 
         # Enable orchestrated mode
         FLAGS.orchestrated = True
+        # Set minimum placement push duration to 1s
+        FLAGS.min_placement_push_duration = 1_000_000
         self._simulator = Simulator(
             scheduler=self._scheduler,
             worker_pools=WorkerPools(
@@ -528,12 +539,16 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         # Construct response. Notably, we apply stage-id mapping
         placements = []
         for placement in sim_placements:
+            # Ignore virtual placements
+            if placement.task.state < TaskState.RELEASED:
+                continue
+
             worker_id = (
                 self.__get_worker_id()
                 if placement.placement_type == Placement.PlacementType.PLACE_TASK
                 else "None"
             )
-            task_id = r.stage_id_mapping[placement.task.name]
+            task_id = r.spark_task_id(placement.task.name)
             cores = (
                 sum(x for _, x in placement.execution_strategy.resources.resources)
                 if placement.placement_type == Placement.PlacementType.PLACE_TASK
@@ -577,7 +592,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
             )
 
         r = self._registered_applications[request.application_id]
-        task = r.task_graph.get_task(r.stage_id_mapping[request.task_id])
+        task = r.task_graph.get_task(r.canonical_task_id(request.task_id))
         if task is None:
             msg = f"[{stime}] Task '{request.task_id}' does not exist in the task graph '{r.task_graph.name}'"
             self._logger.error(msg)
@@ -587,7 +602,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
             )
 
         if task.state != TaskState.RUNNING:
-            msg = f"[{stime}] Received task completion notification for task '{request.task_id}' but it is not running"
+            msg = f"[{stime}] Received task completion notification for task '{request.task_id}' (mapped to '{r.canonical_task_id(request.task_id)}') of '{r.task_graph.name}' but it is not running"
             self._logger.error(msg)
             return erdos_scheduler_pb2.NotifyTaskCompletionResponse(
                 success=False,
