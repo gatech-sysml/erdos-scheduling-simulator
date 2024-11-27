@@ -141,8 +141,6 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
 
         # Enable orchestrated mode
         FLAGS.orchestrated = True
-        # Set minimum placement push duration to 1s
-        FLAGS.min_placement_push_duration = 1_000_000
         # Set scheduler runtime to zero
         FLAGS.scheduler_runtime = 0
 
