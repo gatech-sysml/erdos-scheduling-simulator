@@ -43,6 +43,7 @@ class EventType(Enum):
     SCHEDULER_FINISHED = 12  # Signifies the end of the scheduler loop.
     SIMULATOR_END = 13  # Signify the end of the simulator loop.
     LOG_UTILIZATION = 14  # Ask the simulator to log worker pool utilization.
+    LOG_STATS = 15  # Log simulator statistics
 
     def __lt__(self, other) -> bool:
         # This method is used to order events in the event queue. We prioritize
@@ -1763,17 +1764,17 @@ class Simulator(object):
             self.__handle_scheduler_finish(event)
         elif event.event_type == EventType.SIMULATOR_END:
             # End of the simulator loop.
+            assert event.time == self._simulator_time
+            self.log_stats()
             self._csv_logger.debug(
-                f"{event.time.time},SIMULATOR_END,{self._finished_tasks},"
-                f"{self._cancelled_tasks},{self._missed_task_deadlines},"
-                f"{self._finished_task_graphs},"
-                f"{len(self._workload.get_cancelled_task_graphs())},"
-                f"{self._missed_task_graph_deadlines}"
+                f"{event.time.time},SIMULATOR_END",
             )
             self._logger.info("[%s] Ending the simulator loop.", event.time.time)
             return True
         elif event.event_type == EventType.LOG_UTILIZATION:
             self.__log_utilization(event.time)
+        elif event.event_type == EventType.LOG_STATS:
+            self.log_stats(event.time)
         else:
             raise ValueError(f"[{event.time}] Retrieved event of unknown type: {event}")
         return False
@@ -2154,3 +2155,12 @@ class Simulator(object):
                     f"{worker_pool_resources.get_allocated_quantity(resource)},"
                     f"{worker_pool_resources.get_available_quantity(resource)}"
                 )
+
+    def log_stats(self):
+        self._csv_logger.debug(
+            f"{self._simulator_time.time},LOG_STATS,{self._finished_tasks},"
+            f"{self._cancelled_tasks},{self._missed_task_deadlines},"
+            f"{self._finished_task_graphs},"
+            f"{len(self._workload.get_cancelled_task_graphs())},"
+            f"{self._missed_task_graph_deadlines}"
+        )
