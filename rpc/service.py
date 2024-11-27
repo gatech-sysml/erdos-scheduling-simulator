@@ -71,8 +71,8 @@ class DataLoader(Enum):
 
 
 class WorkloadLoader(BaseWorkloadLoader):
-    def __init__(self) -> None:
-        self._workload = Workload.empty()
+    def __init__(self, _flags) -> None:
+        self._workload = Workload.empty(_flags)
 
     def add_task_graph(self, task_graph: TaskGraph):
         self._workload.add_task_graph(task_graph)
@@ -249,7 +249,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
             name=f"WorkerPool_{parsed_uri.netloc}",
             _logger=self._logger,
         )
-        self._workload_loader = WorkloadLoader()
+        self._workload_loader = WorkloadLoader(FLAGS)
 
         # Enable orchestrated mode
         FLAGS.orchestrated = True
@@ -298,6 +298,14 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
     async def RegisterDriver(self, request, context):
         stime = self.__stime()
 
+        if not self.__worker_registered():
+            msg = f"[{stime}] Failed to register driver (id={request.id}) because no worker has been registered yet."
+            self._logger.error(msg)
+            return erdos_scheduler_pb2.RegisterDriverResponse(
+                success=False,
+                message=msg,
+            )
+
         if request.id in self._registered_app_drivers:
             msg = f"[{stime}] Driver with id '{request.id}' is already registered"
             self._logger.error(msg)
@@ -336,6 +344,14 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         # Deletion of taskgraph from registered_applications and driver from registered_app_drivers should be done carefully.
         task_graph_name = self._registered_app_drivers[request.id]
         del self._registered_app_drivers[request.id]
+
+        # Log stats
+        log_stats_event = Event(
+            event_type=EventType.LOG_STATS,
+            time=stime,
+        )
+        with self._lock:
+            self._simulator._event_queue.add_event(log_stats_event)
 
         msg = f"[{stime}] Successfully de-registered driver with id {request.id} for task graph {task_graph_name}"
         self._logger.info(msg)

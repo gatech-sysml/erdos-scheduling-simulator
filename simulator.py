@@ -1138,6 +1138,7 @@ class Simulator(object):
             f"{event.task.timestamp},{event.task.id},{event.task.task_graph},"
             f"{event.task.slowest_execution_strategy.runtime.time}"
         )
+        self.log_stats(event.time)
 
         # If the task already had a placement, we remove the placement from our queue.
         if event.task.id in self._future_placement_events:
@@ -1255,8 +1256,12 @@ class Simulator(object):
                 f"{task_graph.deadline.to(EventTime.Unit.US).time},"
                 f"{tardiness.to(EventTime.Unit.US).time}"
             )
+
             if task_graph.deadline < event.time:
                 self._missed_task_graph_deadlines += 1
+
+            self.log_stats(event.time)
+
             self._logger.info(
                 "[%s] Finished the TaskGraph %s with a deadline %s at the "
                 "completion of the task %s with a tardiness of %s.",
@@ -1764,8 +1769,7 @@ class Simulator(object):
             self.__handle_scheduler_finish(event)
         elif event.event_type == EventType.SIMULATOR_END:
             # End of the simulator loop.
-            assert event.time == self._simulator_time
-            self.log_stats()
+            self.log_stats(event.time)
             self._csv_logger.debug(
                 f"{event.time.time},SIMULATOR_END",
             )
@@ -1787,7 +1791,9 @@ class Simulator(object):
                 the clock (in us).
         """
         if step_size < EventTime.zero():
-            raise ValueError(f"Simulator cannot step backwards {step_size}")
+            raise ValueError(
+                f"[{self._simulator_time}] Simulator cannot step backwards {step_size}"
+            )
 
         # Step the simulator for the required steps and construct TASK_FINISHED events
         # for any tasks that were able to complete their execution.
@@ -2156,9 +2162,9 @@ class Simulator(object):
                     f"{worker_pool_resources.get_available_quantity(resource)}"
                 )
 
-    def log_stats(self):
+    def log_stats(self, sim_time: EventTime):
         self._csv_logger.debug(
-            f"{self._simulator_time.time},LOG_STATS,{self._finished_tasks},"
+            f"{sim_time.time},LOG_STATS,{self._finished_tasks},"
             f"{self._cancelled_tasks},{self._missed_task_deadlines},"
             f"{self._finished_task_graphs},"
             f"{len(self._workload.get_cancelled_task_graphs())},"
