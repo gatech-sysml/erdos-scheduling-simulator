@@ -137,6 +137,15 @@ class RegisteredApplication:
 
 class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
     def __init__(self) -> None:
+        # Override some flags
+
+        # Enable orchestrated mode
+        FLAGS.orchestrated = True
+        # Set minimum placement push duration to 1s
+        FLAGS.min_placement_push_duration = 1_000_000
+        # Set scheduler runtime to zero
+        FLAGS.scheduler_runtime = 0
+
         self._logger = setup_logging(
             name=__name__,
             log_dir=FLAGS.log_dir,
@@ -251,10 +260,6 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         )
         self._workload_loader = WorkloadLoader(FLAGS)
 
-        # Enable orchestrated mode
-        FLAGS.orchestrated = True
-        # Set minimum placement push duration to 1s
-        FLAGS.min_placement_push_duration = 1_000_000
         self._simulator = Simulator(
             scheduler=self._scheduler,
             worker_pools=WorkerPools(
@@ -583,6 +588,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         for placement in sim_placements:
             # Ignore virtual placements
             if placement.task.state < TaskState.RELEASED:
+                self._logger.debug("[{stime}] Skipping placement: {placement}")
                 continue
 
             worker_id = (
