@@ -241,7 +241,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         t = int(time.time())
         framework_name = request.name
         self._master_uri = request.uri
-        self._initialization_time = EventTime(t, EventTime.Unit.S)
+        self._initialization_time = EventTime(t, EventTime.Unit.US)
         stime = self.__stime()
 
         parsed_uri = urlparse(self._master_uri)
@@ -398,7 +398,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                     dependencies=dependencies,
                     dataset_size=dataset_size,
                     max_executors_per_job=max_executors_per_job,
-                    runtime_unit=EventTime.Unit.S,
+                    runtime_unit=EventTime.Unit.US,
                 )
             except Exception as e:
                 msg = f"[{stime}] Failed to load TPCH query {query_num}. Exception: {e}"
@@ -692,7 +692,9 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         if self._initialization_time is None:
             return EventTime.invalid()
         ts = int(time.time())
-        ts = EventTime(ts, EventTime.Unit.S)
+        # NOTE: The service runs in the US time unit for better compatibility with the simulator.
+        # The simulator uses an abstract unit of time, and it is all relative.
+        ts = EventTime(ts, EventTime.Unit.US)
         return ts - self._initialization_time
 
     def __framework_registered(self):
