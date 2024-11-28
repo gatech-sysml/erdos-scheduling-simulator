@@ -151,9 +151,23 @@ pip install -r rpc/requirements.txt
 python -m grpc_tools.protoc -I./rpc/protos --python_out=. --grpc_python_out=. ./rpc/protos/rpc/erdos_scheduler.proto
 ```
 
-### Run the service using
+### Run the service
 ```bash
-python -m rpc.service
+python -m rpc.service --enforce_deadlines --scheduler_runtime=0 
+```
+
+The above command uses the default argument values from the `service.py` and `main.py`. The default scheduler is `EDF`. Other options available for the
+service are `FIFO` and `TetriSched`. The DSched scheduler is a specific instantiation of the `TetriSched` scheduler. The other schedulers can be run
+as follows:
+
+#### To instantiate FIFO scheduler for the service:
+```bash
+python -m rpc.service --scheduler=FIFO --enforce_deadlines --scheduler_runtime=0 
+```
+
+#### To instantiate DSched scheduler for the service:
+```bash
+python -m rpc.service --scheduler=TetriSched --enforce_deadlines --scheduler_runtime=0 --release_taskgraphs --opt_passes=CRITICAL_PATH_PASS --opt_passes=CAPACITY_CONSTRAINT_PURGE_PASS --oppasses=DYNAMIC_DISCRETIZATION_PASS --retract_schedules --scheduler_max_occupancy_threshold=0.999 --finer_discretization_at_prev_solution --scheduler_selective_rescheduling --scheduler_reconsideration_period=0.6  --scheduler_time_discretization=1 --scheduler_max_time_discretization=5 --finer_discretization_window=5 --scheduler_log_to_file  
 ```
 
 ### Run local tests for the erdos-spark service
@@ -168,6 +182,10 @@ pytest tests/test_service.py
 ```bash
 python -m rpc.service
 ```
+Refer to the above section to instantiate different schedulers for the service. 
+
+> NOTE: Since we emulate a 20-node spark cluster on a single system, an additional flag `--override_worker_cpu_count` needs to be passed in the
+> service launch command.
 
 ### Start all components of the spark cluster
 Run the following commands from the root directory of the `spark-mirror` repository.
