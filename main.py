@@ -391,8 +391,9 @@ flags.DEFINE_integer(
 flags.DEFINE_integer(
     "scheduler_max_time_discretization",
     5,
-    "The maximum discretization that the scheduler can have (in µs). "
-    "Only used when scheduler_adaptive_discretization flag is enabled. (default: 5)",
+    "The maximum discretization that the scheduler can have. "
+    "Only used when scheduler_adaptive_discretization flag is enabled. (default: 5)."
+    "Be careful about the EventTime.Unit. Some parts of the code assume Unit.US",
 )
 flags.DEFINE_float(
     "scheduler_max_occupancy_threshold",
@@ -431,9 +432,10 @@ flags.DEFINE_integer(
     "scheduler_time_discretization",
     1,
     "The length of each slot in the space-time matrix to consider for scheduling the "
-    "tasks (in µs). The default value is 1µs, and a higher value can lead to faster "
+    "tasks. The default value is 1 (see note for unit), and a higher value can lead to faster "
     "solutions but a potentially lower goodput due to resources being blocked for the "
-    "entirety of the slot.",
+    "entirety of the slot. NOTE: Since time in the simulator is an abstract concept, be "
+    "careful about the EventTime.Unit. Some parts of the code might assume Unit.US",
 )
 flags.DEFINE_enum(
     "scheduler_policy",
