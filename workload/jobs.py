@@ -809,6 +809,9 @@ class JobGraph(Graph[Job]):
         # TODO (Sukrit): Right now, this assumes that all Tasks in the TaskGraph come
         # with the same deadline. At some point, we will have to implement a
         # heuristic-based deadline splitting technique.
+        
+        # NOTE: The taskgraph deadline is re-generated (and overwritten) after 
+        # use_branch_predicated_deadlines code, since fuzz is invoked again there.
         task_deadline = release_time + self.completion_time.fuzz(
             deadline_variance, deadline_bounds
         )
@@ -883,6 +886,8 @@ class JobGraph(Graph[Job]):
         else:
             weighted_task_graph_length = self.__get_completion_time()
 
+        # NOTE: This is the second time the deadline is being set, based on a second 
+        # invocation of fuzz.
         task_graph_deadline = release_time + weighted_task_graph_length.fuzz(
             deadline_variance, deadline_bounds
         )
