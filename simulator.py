@@ -341,7 +341,7 @@ class Simulator(object):
         self.__log_utilization(self._simulator_time)
 
         # Internal data.
-        self._last_scheduler_start_time = self._simulator_time
+        self._last_scheduler_start_time = EventTime.invalid()
         self._next_scheduler_event = None
         self._last_scheduler_placements: Optional[Placements] = None
 
@@ -582,6 +582,10 @@ class Simulator(object):
         Args:
             event (`Event`): The event to handle.
         """
+
+        if self._last_scheduler_start_time == event.time:
+            return
+
         # Log the required CSV information.
         currently_placed_tasks = self._worker_pools.get_placed_tasks()
         schedulable_tasks = self._workload.get_schedulable_tasks(
@@ -1430,6 +1434,7 @@ class Simulator(object):
                     task=event.task,
                     placement=event.placement,
                 )
+                event.placement._placement_time = next_placement_time
                 self._future_placement_events[task.id] = next_placement_event
                 self._event_queue.add_event(next_placement_event)
                 self._logger.info(
