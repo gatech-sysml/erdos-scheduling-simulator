@@ -525,8 +525,6 @@ class Simulator(object):
         """Tick the simulator until the specified time"""
 
         def f():
-            self._logger.debug(f"EQ: {self._event_queue}")
-
             time_until_next_event = self.__time_until_next_event()
 
             if (
@@ -1224,6 +1222,7 @@ class Simulator(object):
         task_placed_at_worker_pool = self._worker_pools.get_worker_pool(
             event.task.worker_pool_id
         )
+
         task_placed_at_worker_pool.remove_task(current_time=event.time, task=event.task)
 
         # Remove the task from it's task graph's current placements
@@ -1626,7 +1625,9 @@ class Simulator(object):
                 task_graph = self._workload.get_task_graph(task.task_graph)
                 return task_graph.is_source_task(task)
 
-            releasable_tasks = [task for task in releasable_tasks if is_source_task(task)]
+            releasable_tasks = [
+                task for task in releasable_tasks if is_source_task(task)
+            ]
 
             self._logger.info(
                 "[%s] The WorkloadLoader %s has %s TaskGraphs that released %s tasks.",
@@ -1676,7 +1677,6 @@ class Simulator(object):
 
             max_release_time = self._simulator_time
             for task in releasable_tasks:
-
                 event = Event(
                     event_type=EventType.TASK_RELEASE, time=task.release_time, task=task
                 )
