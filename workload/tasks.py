@@ -224,6 +224,7 @@ class Task(object):
         self._state = TaskState.SCHEDULED
         self._scheduling_time = time
         self._scheduler_placement = placement
+        self._start_time = placement.placement_time
         self._worker_pool_id = placement.worker_pool_id
         self.update_remaining_time(placement.execution_strategy.runtime)
 
