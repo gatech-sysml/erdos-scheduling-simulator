@@ -29,7 +29,7 @@ def launch_query(query_number, args):
     cmd = [
         f"{args.spark_mirror_path.resolve()}/bin/spark-submit",
         *("--deploy-mode", "cluster"),
-        *("--master", "spark://130.207.125.81:7077"),
+        *("--master", f"spark://{args.spark_master_ip}:7077"),
         *("--conf", "'spark.port.maxRetries=132'"),
         *("--conf", "'spark.eventLog.enabled=true'"),
         *("--conf", f"'spark.eventLog.dir={args.spark_eventlog_dir.resolve()}'"),
@@ -122,6 +122,12 @@ def main():
         type=Path,
         required=True,
         help="Path to spark-mirror repository",
+    )
+    parser.add_argument(
+        "--spark-master-ip",
+        type=str,
+        required=True,
+        help="IP address of node running Spark master",
     )
     parser.add_argument(
         "--tpch-spark-path",
