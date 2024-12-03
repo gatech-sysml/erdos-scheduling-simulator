@@ -634,6 +634,9 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         # The second check makes sure that the task graph is indeed cancelled.
         # We have this additional guard because at the start all tasks are
         # VIRTUAL and we don't want to terminate the application then.
+        
+        if r.task_graph.is_cancelled():
+            self._logger.error(f"[{stime}] Task graph '{r.task_graph.name}' is in state cancelled.")
 
         should_terminate = all(
             task.state
@@ -645,13 +648,19 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
             for task in r.task_graph
         ) and (r.task_graph.is_cancelled())
         if should_terminate:
-            msg = f"[{stime}] Task graph '{r.task_graph.name}' was cancelled. No more placements to provide."
+            msg = f"[{stime}] Task graph '{r.task_graph.name}' was cancelled and simulator has processed all released/ scheduled tasks. Terminating it since it has no more placements to provide."
             self._logger.error(msg)
             return erdos_scheduler_pb2.GetPlacementsResponse(
                 success=True,
                 message=msg,
                 terminate=True,
             )
+        elif r.task_graph.is_cancelled() and not should_terminate:
+            msg = f"[{stime}] Task graph '{r.task_graph.name}' was cancelled but simulator is still processing some released/ scheduled tasks. Will provide placements."
+            self._logger.error(msg)
+        else:
+            msg = f"[{stime}] Task graph '{r.task_graph.name}' is actively running. Will provide placements."
+            self._logger.info(msg)
 
         with self._lock:
             sim_placements = self._simulator.get_current_placements_for_task_graph(
@@ -687,10 +696,12 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                     "cores": cores,
                 },
             )
-
+            
+        msg = f"[{stime}] Returning the following placements {placements} for task graph '{request.id}'."
+        self._logger.info(msg)
         return erdos_scheduler_pb2.GetPlacementsResponse(
             success=True,
-            message=f"Placements for task graph '{request.id}' returned successfully",
+            message=msg,
             placements=placements,
         )
 
