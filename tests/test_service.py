@@ -267,35 +267,53 @@ def test_service():
     # Wait for 2 seconds to allow scheduler to process task completion and run scheduler
     time.sleep(2)
 
-    # Get placements for the task, entire taskgraph should be cancelled since deadline missed
-    # Other root vertex (0) will be cancelled first. Then the subsequent vertices.
-    # NOTE: The simulator will return all current placements for a taskgraph (including 
-    # those already sent by the service) until the task is marked as finished. Spark will ignore it. 
-    # In this scenario of task-graph-2, placements has two values- Task 0 in cancelled state and
-    # Task 1 in running state. The service will return both of them.
+    # Get placements for the task, entire taskgraph would be cancelled since deadline has passed.
+    # Since one root vertex (1) is running, the other root vertex (0) will be cancelled first,
+    # then the subsequent vertices.
+    # NOTE: The service will wait until all running/ scheduled tasks complete and are removed 
+    # from the workerpool before issuing a terminate=True for the taskgraph. Until then it will 
+    # return current placements for a taskgraph (including those already sent by the service) 
+    # and wait for running tasks to finish. Spark will ignore it. 
     request = erdos_scheduler_pb2.GetPlacementsRequest(
         timestamp=1234567890,
         id="task-graph-2",
     )
     response = stub.GetPlacements(request)
-    print(response)
     assert response.success
     actual_task_ids = set()
+    # Will return placement for task_id 1
     for placement in response.placements:
-        if placement.task_id == 0:
-            assert (
-                placement.worker_id == "None"
-                and placement.application_id == "task-graph-2"
-                and placement.cancelled == True
-            )
         if placement.task_id == 1:
             assert (
                 placement.worker_id == "1234" 
                 and placement.application_id == "task-graph-2" 
-                and placement.cancelled == False
             )
         actual_task_ids.add(placement.task_id)
-    assert actual_task_ids == {0, 1}
+    assert actual_task_ids == {1}
+    
+    # Wait for 5s to issue notify task completion for task_id 1 in task-graph-2
+    time.sleep(5)
+    request = erdos_scheduler_pb2.NotifyTaskCompletionRequest(
+        application_id="task-graph-2", task_id=1, timestamp=1234567890
+    )
+    response = stub.NotifyTaskCompletion(request)
+    assert response.success
+    
+    # Wait for 5s to allow the simulator to process the event. 
+    # Invoke get placements again for task-graph 2, it should return terminate=True now
+    time.sleep(5)
+    request = erdos_scheduler_pb2.GetPlacementsRequest(
+        timestamp=1234567890,
+        id="task-graph-2",
+    )
+    response = stub.GetPlacements(request)
+    assert response.success
+    actual_task_ids = set()
+    # Will return placement for task_id 1
+    for placement in response.placements:
+        actual_task_ids.add(placement.task_id)
+    assert len(actual_task_ids) == 0
+    assert response.terminate == True
 
     # Deregister framework
     request = erdos_scheduler_pb2.DeregisterFrameworkRequest(
