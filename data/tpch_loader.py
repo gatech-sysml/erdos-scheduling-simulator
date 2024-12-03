@@ -420,10 +420,10 @@ def make_release_policy(
 # TODO: make configurable
 TPCH_SUBDIR = "100g/"
 DECIMA_TPCH_DIR = (
-    "/home/dgarg39/erdos-scheduling-simulator/profiles/workload/tpch/decima/"
+    Path(__file__).resolve().parent / ".." / "profiles/workload/tpch/decima/"
 )
 CLOUDLAB_TPCH_DIR = (
-    "/home/dgarg39/erdos-scheduling-simulator/profiles/workload/tpch/cloudlab/"
+    Path(__file__).resolve().parent / ".." / "profiles/workload/tpch/cloudlab/"
 )
 
 
