@@ -133,7 +133,6 @@ class Experiment:
             dry_run=self.args.dry_run,
         ) as s:
             Launcher(self.launcher_args, self.args.dry_run).launch()
-            time.sleep(10)
 
 
 def main():
