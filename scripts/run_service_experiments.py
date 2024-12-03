@@ -83,6 +83,9 @@ class Service:
             self.clean()
             raise e
 
+        if not self.dry_run:
+            time.sleep(5)
+
     def clean(self):
         if self._service:
             self._service.wait()
