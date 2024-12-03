@@ -52,6 +52,9 @@ Clone the repository with submodules
 git clone https://github.com/dhruvsgarg/spark_mirror.git --recursive
 ```
 
+> NOTE: If the submodule was cloned earlier but has been updated since, `git fetch --all` will not be able to track those changes. To pull in updates
+> from submodule's parent, run `git submodule update --init --recursive`.
+
 ### Verify branch
 Verify or set current branch `erdos-spark-integration`
 
