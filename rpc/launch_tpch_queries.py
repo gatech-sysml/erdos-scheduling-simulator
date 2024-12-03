@@ -225,6 +225,7 @@ def main():
             query_number = rng.randint(1, 22)
         ps.append(launch_query(query_number, args))
         print(
+            f"({i+1}/{len(release_times)})",
             "Current time: ",
             time.strftime("%Y-%m-%d %H:%M:%S"),
             " launching query: ",
@@ -238,6 +239,7 @@ def main():
     stub = erdos_scheduler_pb2_grpc.SchedulerServiceStub(channel)
     response = stub.Shutdown(erdos_scheduler_pb2.Empty())
     channel.close()
+    print("Sent shutdown signal to the service")
 
 
 if __name__ == "__main__":
