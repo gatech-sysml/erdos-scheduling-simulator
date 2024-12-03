@@ -47,6 +47,8 @@ service SchedulerService {
 
     /// Notifies the Scheduler that a Task from a particular TaskGraph has completed.option
     rpc NotifyTaskCompletion(NotifyTaskCompletionRequest) returns (NotifyTaskCompletionResponse) {}
+
+    rpc Shutdown(Empty) returns (Empty) {}
 }
 
 
@@ -201,3 +203,5 @@ message GetPlacementsResponse {
     string message = 3;
     bool terminate = 4; // terminate the task graph
 }
+
+message Empty {}

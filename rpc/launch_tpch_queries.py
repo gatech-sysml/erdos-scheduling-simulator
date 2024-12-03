@@ -11,6 +11,10 @@ from pathlib import Path
 from workload import JobGraph
 from utils import EventTime
 from data.tpch_loader import make_release_policy
+from rpc import erdos_scheduler_pb2
+from rpc import erdos_scheduler_pb2_grpc
+
+import grpc
 
 
 def map_dataset_to_deadline(dataset_size):
@@ -49,13 +53,14 @@ def launch_query(query_number, args):
     # )
 
     try:
-        cmd = ' '.join(cmd)
+        cmd = " ".join(cmd)
         print("Launching:", cmd)
-        subprocess.Popen(
+        p = subprocess.Popen(
             cmd,
             shell=True,
         )
         print("Query launched successfully.")
+        return p
     except Exception as e:
         print(f"Error launching query: {e}")
 
@@ -187,7 +192,9 @@ def main():
         default=1234,
         help="RNG seed for generating inter-arrival periods and picking DAGs (default: 1234)",
     )
-    parser.add_argument("--queries", type=int, nargs='+', help="Launch specific queries")
+    parser.add_argument(
+        "--queries", type=int, nargs="+", help="Launch specific queries"
+    )
 
     args = parser.parse_args()
 
@@ -197,7 +204,7 @@ def main():
     os.environ["TPCH_INPUT_DATA_DIR"] = str(args.tpch_spark_path.resolve() / "dbgen")
 
     if args.queries:
-        assert(len(args.queries) == args.num_queries)
+        assert len(queries) == args.num_queries
 
     rng = random.Random(args.rng_seed)
 
@@ -206,6 +213,7 @@ def main():
     print("Release times:", release_times)
 
     # Launch queries
+    ps = []
     inter_arrival_times = [release_times[0].time]
     for i in range(len(release_times) - 1):
         inter_arrival_times.append(release_times[i + 1].time - release_times[i].time)
@@ -215,13 +223,21 @@ def main():
             query_number = args.queries[i]
         else:
             query_number = rng.randint(1, 22)
-        launch_query(query_number, args)
+        ps.append(launch_query(query_number, args))
         print(
             "Current time: ",
             time.strftime("%Y-%m-%d %H:%M:%S"),
             " launching query: ",
             query_number,
         )
+
+    for p in ps:
+        p.wait()
+
+    channel = grpc.insecure_channel("localhost:50051")
+    stub = erdos_scheduler_pb2_grpc.SchedulerServiceStub(channel)
+    response = stub.Shutdown(erdos_scheduler_pb2.Empty())
+    channel.close()
 
 
 if __name__ == "__main__":

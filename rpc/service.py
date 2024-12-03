@@ -136,7 +136,9 @@ class RegisteredApplication:
 
 
 class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
-    def __init__(self) -> None:
+    def __init__(self, server) -> None:
+        self._server = server
+
         # Override some flags
 
         # Enable orchestrated mode
@@ -230,6 +232,7 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         self._registered_app_drivers = (
             {}
         )  # Spark driver id differs from taskgraph name (application id)
+        self._shutdown = False
         self._lock = threading.Lock()
 
         super().__init__()
@@ -357,6 +360,10 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
 
         msg = f"[{stime}] Successfully de-registered driver with id {request.id} for task graph {task_graph_name}"
         self._logger.info(msg)
+
+        if len(self._registered_app_drivers) == 0 and self._shutdown:
+            await self._server.stop(0)
+
         return erdos_scheduler_pb2.DeregisterDriverResponse(
             success=True,
             message=msg,
@@ -755,6 +762,10 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
             message=msg,
         )
 
+    async def Shutdown(self, request, context):
+        self._shutdown = True
+        return erdos_scheduler_pb2.Empty()
+
     async def _tick_simulator(self):
         while True:
             with self._lock:
@@ -819,7 +830,7 @@ def main(_argv):
     loop = asyncio.get_event_loop()
 
     server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=FLAGS.max_workers))
-    servicer = Servicer()
+    servicer = Servicer(server)
     erdos_scheduler_pb2_grpc.add_SchedulerServiceServicer_to_server(servicer, server)
     server.add_insecure_port(f"[::]:{FLAGS.port}")
 
