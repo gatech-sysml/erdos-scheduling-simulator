@@ -38,9 +38,9 @@ class EventType(Enum):
     TASK_PREEMPT = 7  # Ask the simulator to preempt a task.
     TASK_MIGRATION = 8  # Ask the simulator to migrate a task.
     LOAD_PROFILE = 9  # Ask the simulator to load a profile into the WorkerPool.
-    SCHEDULER_START = 10  # Requires the simulator to invoke the scheduler.
-    SCHEDULER_FINISHED = 11  # Signifies the end of the scheduler loop.
-    TASK_PLACEMENT = 12  # Ask the simulator to place a task.
+    TASK_PLACEMENT = 10  # Ask the simulator to place a task.
+    SCHEDULER_START = 11  # Requires the simulator to invoke the scheduler.
+    SCHEDULER_FINISHED = 12  # Signifies the end of the scheduler loop.
     SIMULATOR_END = 13  # Signify the end of the simulator loop.
     LOG_UTILIZATION = 14  # Ask the simulator to log worker pool utilization.
     LOG_STATS = 15  # Log simulator statistics
