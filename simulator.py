@@ -1445,17 +1445,22 @@ class Simulator(object):
                         self._logger.warning(msg)
                 
                 # Unschedule the task
-                unschedule_task.unschedule(event.time)
-                self._csv_logger.debug(
-                    f"{event.time.time},TASK_UNSCHEDULED,{unschedule_task.name},{unschedule_task.timestamp},"
-                    f"{unschedule_task.id},{unschedule_task.task_graph}"
-                )
-                    
-                self._logger.info(
-                    "[%s] Finished unscheduling of task %s.",
-                    event.time.time,
-                    unschedule_task,
-                )
+                if unschedule_task.state == TaskState.SCHEDULED:
+                    unschedule_task.unschedule(event.time)
+                    self._csv_logger.debug(
+                        f"{event.time.time},TASK_UNSCHEDULED,{unschedule_task.name},{unschedule_task.timestamp},"
+                        f"{unschedule_task.id},{unschedule_task.task_graph}"
+                    )
+                    msg = (
+                        f"[{event.time.time}] Finished unscheduling of task {unschedule_task}."
+                    )
+                    self._logger.info(msg)
+                else:
+                    msg = (
+                        f"[{event.time.time}] Task {unschedule_task} was not in SCHEDULED state and was in "
+                        f"{unschedule_task.state} state. Skip unscheduling."
+                    )
+                    self._logger.info(msg)
         
         if not task.is_ready_to_run(task_graph):
             if task.state == TaskState.CANCELLED or task_graph.is_cancelled():
