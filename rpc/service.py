@@ -753,6 +753,9 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
             self._logger.info(
                 f"[{stime}] Adding event {task_finished_event} to the simulator's event queue"
             )
+            if actual_task_completion_time < self.__stime():
+                self._logger.error(
+                    f"[{stime}] Task '{request.task_id}' of task graph '{r.task_graph.name}' had exceeded its runtime by {self.__stime() - actual_task_completion_time}")
 
             scheduler_start_event = Event(
                 event_type=EventType.SCHEDULER_START,
