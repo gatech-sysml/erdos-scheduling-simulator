@@ -241,6 +241,9 @@ def main():
     for p in ps:
         p.wait()
 
+    # Wait for some time before sending the shutdown signal
+    time.sleep(20)
+
     channel = grpc.insecure_channel("localhost:50051")
     stub = erdos_scheduler_pb2_grpc.SchedulerServiceStub(channel)
     response = stub.Shutdown(erdos_scheduler_pb2.Empty())
