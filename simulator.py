@@ -1694,35 +1694,34 @@ class Simulator(object):
 
             # Add task graph entry in self._current_task_graph_placements to
             # track its task placements
+            #
+            # In addition to newly added task graphs, self._workload also
+            # contains all previously released task graphs.
+            #
+            # So, we guard the addition of the entry on two conditions:
+            # (1) The task graph doesn't have an entry (we don't want to
+            #     nuke an existing one)
+            # (2) The task graph is not complete (we only keep the entry
+            #     alive while the task graph is running to avoid a memory
+            #     leak)
             for task_graph_name, task_graph in self._workload.task_graphs.items():
-                # In addition to newly added task graphs, self._workload also
-                # contains all previously released task graphs.
-                #
-                # So, we guard the addition of the entry on two conditions:
-                # (1) The task graph doesn't have an entry (we don't want to
-                #     nuke an existing one)
-                # (2) The task graph is not complete (we only keep the entry
-                #     alive while the task graph is running to avoid a memory
-                #     leak)
                 if (
                     task_graph_name not in self._current_task_graph_placements
                     and not task_graph.is_complete()
                 ):
                     self._current_task_graph_placements[task_graph_name] = {}
 
-            # # Add the TaskGraphRelease events into the system.
-            # for task_graph_name, task_graph in self._workload.task_graphs.items():
-            #     event = Event(
-            #         event_type=EventType.TASK_GRAPH_RELEASE,
-            #         time=task_graph.release_time,
-            #         task_graph=task_graph_name,
-            #     )
-            #     self._event_queue.add_event(event)
-            #     self._logger.info(
-            #         "[%s] Added %s to the event queue.",
-            #         self._simulator_time.to(EventTime.Unit.US).time,
-            #         event,
-            #     )
+                    event = Event(
+                        event_type=EventType.TASK_GRAPH_RELEASE,
+                        time=task_graph.release_time,
+                        task_graph=task_graph_name,
+                    )
+                    self._event_queue.add_event(event)
+                    self._logger.info(
+                        "[%s] Added %s to the event queue.",
+                        self._simulator_time.to(EventTime.Unit.US).time,
+                        event,
+                    )
 
             max_release_time = self._simulator_time
             for task in releasable_tasks:
