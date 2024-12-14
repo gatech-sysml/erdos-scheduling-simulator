@@ -40,15 +40,21 @@ class Service:
         csv_file = self.output_dir / "service.csv"
 
         # launch service
-        self._service = bang(
-            [
-                *("python3", "-m", "rpc.service"),
-                *("--log", log_file),
-                *("--csv_file_name", csv_file),
-                *self.service_args,
-            ],
-            self.dry_run,
-        )
+        with (
+            open(self.output_dir / "service.stdout", "w") as f_out,
+            open(self.output_dir / "service.stderr", "w") as f_err,
+        ):
+            self._service = bang(
+                [
+                    *("python3", "-m", "rpc.service"),
+                    *("--log_file_name", log_file),
+                    *("--csv_file_name", csv_file),
+                    *self.service_args,
+                ],
+                self.dry_run,
+                stdout=f_out,
+                stderr=f_err
+            )
 
         # sleep for some time
         if not self.dry_run:
