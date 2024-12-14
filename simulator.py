@@ -517,7 +517,7 @@ class Simulator(object):
                     step_size = time_until_next_event
             else:
                 step_size = time_until_next_event
-            return step_size
+            return None if time_until_next_event.is_invalid() else step_size
 
         self.__simulate_f(should_step=f)
 

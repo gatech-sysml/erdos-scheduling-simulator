@@ -232,7 +232,8 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         self._registered_app_drivers = (
             {}
         )  # Spark driver id differs from taskgraph name (application id)
-        self._shutdown = False
+        self._received_shutdown = False
+        self._shutting_down = False
         self._lock = threading.Lock()
 
         super().__init__()
@@ -361,7 +362,15 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         msg = f"[{stime}] Successfully de-registered driver with id {request.id} for task graph {task_graph_name}"
         self._logger.info(msg)
 
-        if len(self._registered_app_drivers) == 0 and self._shutdown:
+        if len(self._registered_app_drivers) == 0 and self._received_shutdown:
+            self._logger.info(f"[{stime}] The last driver has been deregistered; finishing simulation")
+            # Signals _tick_simulator() to stop.  Shouldn't be
+            # necessary in principle because after the with block
+            # ends, there shouldn't be any more events left to run,
+            # but doesn't hurt.
+            self._shutting_down = True
+            with self._lock:
+                self._simulator.simulate()
             await self._server.stop(0)
 
         return erdos_scheduler_pb2.DeregisterDriverResponse(
@@ -777,11 +786,11 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         )
 
     async def Shutdown(self, request, context):
-        self._shutdown = True
+        self._received_shutdown = True
         return erdos_scheduler_pb2.Empty()
 
     async def _tick_simulator(self):
-        while True:
+        while not self._shutting_down:
             with self._lock:
                 if self._simulator is not None:
                     stime = self.__stime()
