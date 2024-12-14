@@ -17,10 +17,11 @@ def bang(cmd, dry_run, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
 
 def must(cmd, dry_run, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
     p = bang(cmd, dry_run, stdout, stderr)
-    if p.wait() != 0:
-        stdout, stderr = p.communicate()
-        raise Exception(f"Command failed. stdout: {stdout}. stderr: {stderr}.")
-    return p
+    if not dry_run:
+        if p.wait() != 0:
+            stdout, stderr = p.communicate()
+            raise Exception(f"Command failed. stdout: {stdout}. stderr: {stderr}.")
+        return p
 
 
 @dataclass
