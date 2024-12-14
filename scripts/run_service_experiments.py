@@ -4,6 +4,7 @@ import time
 import traceback
 from pathlib import Path
 from dataclasses import dataclass
+from datetime import datetime
 
 
 def bang(cmd, dry_run, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
@@ -139,7 +140,7 @@ class Experiment:
     launcher_args: any
 
     def run(self, args):
-        output_dir = args.output_dir / self.name
+        output_dir = args.output_dir / (self.name + '-' + datetime.now().isoformat())
         if not output_dir.exists():
             output_dir.mkdir(parents=True)
 
