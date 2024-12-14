@@ -93,9 +93,14 @@ class Service:
         if not self.dry_run:
             time.sleep(5)
 
+        return self
+
+    def wait(self):
+        self._service.wait()
+
     def clean(self):
         if self._service:
-            self._service.wait()
+            self._service.terminate()
         if self._master:
             must([f"{self.spark_mirror_path}/sbin/stop-master.sh"], self.dry_run)
         if self._worker:
@@ -159,6 +164,7 @@ class Experiment:
                 output_dir=output_dir,
                 dry_run=args.dry_run,
             ).launch()
+            s.wait()
 
 
 def main():
