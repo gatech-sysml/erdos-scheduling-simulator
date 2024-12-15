@@ -1232,7 +1232,7 @@ class Simulator(object):
         # Remove the task from it's task graph's current placements
         del self._current_task_graph_placements[event.task.task_graph][event.task.id]
 
-        event.task.finish()
+        event.task.finish(event.time)
 
         # Log the TASK_FINISHED event into the CSV.
         self._finished_tasks += 1
