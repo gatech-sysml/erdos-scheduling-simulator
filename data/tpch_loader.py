@@ -306,7 +306,6 @@ class TpchWorkloadLoader(BaseWorkloadLoader):
             assert flags.override_release_policy == "poisson"
 
             for i, part in enumerate(TpchQueryDifficulty):
-                print(flags.override_poisson_arrival_rates[i])
                 release_policy = self.__make_release_policy(
                     policy_type=flags.override_release_policy,
                     arrival_rate=float(flags.override_poisson_arrival_rates[i]),
