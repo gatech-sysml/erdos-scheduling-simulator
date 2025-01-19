@@ -148,6 +148,10 @@ class Experiment:
         output_dir = args.output_dir / (self.name + '-' + datetime.now().isoformat())
         if not output_dir.exists():
             output_dir.mkdir(parents=True)
+        with open(output_dir / "service.args", "w") as f:
+            print(*self.service_args, sep='\n', file=f)
+        with open(output_dir / "launcher.args", "w") as f:
+            print(*self.launcher_args, sep='\n', file=f)
 
         with Service(
             service_args=self.service_args,
