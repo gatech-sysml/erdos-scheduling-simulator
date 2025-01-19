@@ -448,11 +448,12 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                     success=False, message=msg, num_executors=0
                 )
 
+            task_graph = job_graph.get_next_task_graph(
+                start_time=release_time,
+                _flags=FLAGS,
+            )
+
             def gen(release_time):
-                task_graph = job_graph.get_next_task_graph(
-                    start_time=release_time,
-                    _flags=FLAGS,
-                )
                 return task_graph, stage_id_mapping
 
         else:
@@ -485,6 +486,10 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
 
         r = self._registered_applications[request.id]
         r.generate_task_graph(stime)
+        for task in r.task_graph:
+            d = stime - task._release_time
+            task._release_time = stime
+            task.update_deadline(task.deadline+d)
 
         with self._lock:
             self._simulator._workload.add_task_graph(r.task_graph)
