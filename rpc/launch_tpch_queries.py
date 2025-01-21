@@ -23,7 +23,7 @@ def map_dataset_to_deadline(dataset_size):
     return mapping.get(dataset_size, 120)  # Default to 120s if dataset size is NA
 
 
-def launch_query(query_number, args):
+def launch_query(query_number, index, args):
     deadline = map_dataset_to_deadline(args.dataset_size)
 
     cmd = [
@@ -43,6 +43,7 @@ def launch_query(query_number, args):
         *("--class", "'main.scala.TpchQuery'"),
         f"{args.tpch_spark_path.resolve()}/target/scala-2.13/spark-tpc-h-queries_2.13-1.0.jar",
         f"{query_number}",
+        f"{index}",
         f"{args.dataset_size}",
         f"{args.max_cores}",
     ]
@@ -229,7 +230,7 @@ def main():
             query_number = args.queries[i]
         else:
             query_number = rng.randint(1, 22)
-        ps.append(launch_query(query_number, args))
+        ps.append(launch_query(query_number, i, args))
         print(
             f"({i+1}/{len(release_times)})",
             "Current time: ",

@@ -399,18 +399,28 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
         if request.name.startswith("TPCH Query"):
             # Parse request name
             query_parts = request.name.split()
-            if len(query_parts) != 3 and len(query_parts) != 5:
-                msg = f"[{stime}] Invalid TPCH query request"
-                return erdos_scheduler_pb2.RegisterTaskGraphResponse(
-                    success=False, message=msg, num_executors=0
-                )
-            query_num = int(query_parts[2])
-            if len(query_parts) == 5:
-                dataset_size = int(query_parts[3])
-                max_executors_per_job = int(query_parts[4])
-            else:
-                dataset_size = FLAGS.tpch_dataset_size
-                max_executors_per_job = FLAGS.tpch_max_executors_per_job
+            match query_parts:
+                case _, _, query_num, index, dataset_size, max_executors_per_job:
+                    query_num = int(query_num)
+                    dataset_size = int(dataset_size)
+                    max_executors_per_job = int(max_executors_per_job)
+                case _, _, query_num, dataset_size, max_executors_per_job:
+                    query_num = int(query_num)
+                    # default index counts up from 0; incorrect if
+                    # Spark receives jobs out of order
+                    index = str(len(self._registered_applications))
+                    dataset_size = int(dataset_size)
+                    max_executors_per_job = int(max_executors_per_job)
+                case _, _, query_num:
+                    query_num = int(query_num)
+                    index = str(len(self._registered_applications))
+                    dataset_size = FLAGS.tpch_dataset_size
+                    max_executors_per_job = FLAGS.tpch_max_executors_per_job
+                case _:
+                    msg = f"[{stime}] Invalid TPCH query request"
+                    return erdos_scheduler_pb2.RegisterTaskGraphResponse(
+                        success=False, message=msg, num_executors=0
+                    )
 
             # Convert request.dependencies to [{name: int, children: [int]}]
             dependencies = []
@@ -423,11 +433,12 @@ class Servicer(erdos_scheduler_pb2_grpc.SchedulerServiceServicer):
                 )
 
             # Create a job graph
+            self._logger.debug(str((query_num, index, dataset_size, max_executors_per_job)))
             try:
                 job_graph, stage_id_mapping = self._data_loaders[
                     DataLoader.TPCH
                 ].make_job_graph(
-                    id=request.id,
+                    id=index,
                     query_num=query_num,
                     dependencies=dependencies,
                     dataset_size=dataset_size,
