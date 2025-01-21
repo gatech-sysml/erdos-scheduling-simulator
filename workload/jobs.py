@@ -200,12 +200,6 @@ class JobGraph(Graph[Job]):
         "fixed_gamma",
     )
 
-    # !HACK!  This random number generator is used exclusively to
-    # calculate deadlines.  This ensures that deadlines are consistent
-    # across runs of the simulator in different contexts where RNGs
-    # are called in different orders.
-    _deadline_rng = random.Random(42)
-
     class ReleasePolicyType(Enum):
         """Represents the different release policies supported by a JobGraph."""
 
@@ -811,6 +805,14 @@ class JobGraph(Graph[Job]):
             resolve_conditionals = False
             task_logger = setup_logging(name="Task")
 
+        # Create an RNG to be used when fuzzing deadlines, seeded by
+        # the TaskGraph name and the global random seed, if provided.
+        # This ensures that deadlines are deterministic, which is
+        # needed for simulator/Spark parity.
+        deadline_rng = random.Random(
+            (str(_flags.random_seed) if _flags else "") + task_graph_name
+        )
+
         # Generate the deadline for all the Tasks.
         # TODO (Sukrit): Right now, this assumes that all Tasks in the TaskGraph come
         # with the same deadline. At some point, we will have to implement a
@@ -819,7 +821,7 @@ class JobGraph(Graph[Job]):
         # NOTE: The taskgraph deadline is re-generated (and overwritten) after 
         # use_branch_predicated_deadlines code, since fuzz is invoked again there.
         task_deadline = release_time + self.completion_time.fuzz(
-            deadline_variance, deadline_bounds, rng=type(self)._deadline_rng
+            deadline_variance, deadline_bounds, rng=deadline_rng
         )
 
         # Generate all the `Task`s from the `Job`s in the graph.
@@ -895,7 +897,7 @@ class JobGraph(Graph[Job]):
         # NOTE: This is the second time the deadline is being set, based on a second 
         # invocation of fuzz.
         task_graph_deadline = release_time + weighted_task_graph_length.fuzz(
-            deadline_variance, deadline_bounds, rng=type(self)._deadline_rng
+            deadline_variance, deadline_bounds, rng=deadline_rng
         )
         if _flags and _flags.decompose_deadlines:
             stages_info = {}
