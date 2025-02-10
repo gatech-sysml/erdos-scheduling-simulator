@@ -137,11 +137,6 @@ flags.DEFINE_string(
     "./profiles/workload/tpch/queries.yaml",
     "Path to a YAML file specifying the TPC-H query DAGs",
 )
-flags.DEFINE_integer(
-    "tpch_num_queries",
-    50,
-    "Number of TPC-H queries to run",
-)
 flags.DEFINE_enum(
     "tpch_profile_type",
     "Cloudlab",
