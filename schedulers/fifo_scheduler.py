@@ -37,6 +37,10 @@ class FIFOScheduler(BaseScheduler):
         if _flags is not None:
             if _flags.release_taskgraphs:
                 raise ValueError("FIFOScheduler does not support taskgraphs.")
+            
+    # CHANGE - state switching method
+    def initialize_from(self, system_state):
+        return
 
     def schedule(
         self, sim_time: EventTime, workload: Workload, worker_pools: WorkerPools
