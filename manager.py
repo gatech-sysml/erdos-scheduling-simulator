@@ -190,5 +190,17 @@ class MetricManager():
     def utilization(self, utilization):
         self._utilization = utilization
 
+    def percent_utilization(self):
+        allocated_resources = 0
+        available_resources = 0
+
+        for pool_utilization in self._utilization:
+            for res_utilization in pool_utilization:
+                allocated_resources += res_utilization["resource_allocation"]
+                available_resources += res_utilization["resource_availability"]
+
+        return (allocated_resources * 1.0) / (allocated_resources + available_resources)
+
     def metrics(self):
-        return dict(utilization = self._utilization)
+        utilz = self.percent_utilization()
+        return dict(utilization = utilz)
