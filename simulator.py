@@ -21,7 +21,24 @@ from workload import (
     TaskGraph,
     TaskState,
     Workload,
+    BranchPredictionPolicy
 )
+
+# CHANGE - import switching policy interface
+from scheduler_switching_policy import SchedulerSwitchingPolicy
+
+# CHANGE - import metric and profile managers
+from manager import ProfileManager, MetricManager
+
+# CHANGE - track the scheduler returned through enum
+from scheduler_types import SchedulerType
+
+# CHANGE - import schedulers for switching
+from schedulers import (FIFOScheduler, EDFScheduler, LSFScheduler, 
+                        Z3Scheduler, BranchPredictionScheduler, ILPScheduler,
+                        TetriSchedCPLEXScheduler, TetriSchedGurobiScheduler, ClockworkScheduler,
+                        TetriSchedScheduler, GrapheneScheduler)
+            
 
 
 @total_ordering
@@ -250,8 +267,12 @@ class Simulator(object):
     def __init__(
         self,
         worker_pools: WorkerPools,
+        # CHANGE - receive the scheduler_switching_mode and the scheduler_switching_policy
+        scheduler_switching_policy: SchedulerSwitchingPolicy,
+        enable_dynamic__scheduler_switching: bool,
         scheduler: BaseScheduler,
         workload_loader: BaseWorkloadLoader,
+        branch_prediction_policy: BranchPredictionPolicy,
         loop_timeout: EventTime = EventTime(time=sys.maxsize, unit=EventTime.Unit.US),
         scheduler_frequency: EventTime = EventTime(time=-1, unit=EventTime.Unit.US),
         _flags: Optional["absl.flags"] = None,
@@ -314,6 +335,26 @@ class Simulator(object):
         self._scheduler_frequency = scheduler_frequency
         self._loop_timeout = loop_timeout
         self._task_id_added_to_event_queue = set()
+
+        # CHANGE - define boolean that defines if scheduler should switch dynamically
+        self._enable_dynamic_scheduler_switching = enable_dynamic__scheduler_switching
+
+        # CHANGE - define boolean that tracks if this is the first scheduler invocation
+        self._initial_invocation = True
+
+        # CHANGE - define managers
+        self._profile_manager = ProfileManager()
+        self._metric_manager = MetricManager()
+
+        # define the switching policy user-defined class
+        self._scheduler_switching_policy = scheduler_switching_policy
+
+        # CHANGE - track the system state in a class variable
+        self._system_state = None
+
+        # CHANGE - define flags class variable for access in init_scheduler
+        self._flags = _flags
+        self._branch_prediction_policy = branch_prediction_policy
 
         # Workload variables.
         self._workload_loader = workload_loader
@@ -536,19 +577,46 @@ class Simulator(object):
         )
         self.__log_utilization(event.time)
 
+        # CHANGE - update the metrics (utilization)
+        self.__update_metrics(event.time)
+
         # Execute the scheduler, and insert an event notifying the
         # end of the scheduler into the loop.
         self._last_scheduler_start_time = event.time
         self._next_scheduler_event = None
+
+        # CHANGE - initialize the scheduler object based on the initial_invocation boolean
+        if self._enable_dynamic_scheduler_switching:
+            # initialize the profiles and metrics
+            profiles = self._profile_manager.profiles()
+            metrics = self._metric_manager.metrics()
+
+            # switch the scheduling object based on user-defined policy
+            scheduler_type = self._scheduler_switching_policy.pick_scheduler(metrics=metrics, 
+                                        profiles=profiles, initial_invocation=self._initial_invocation)
+            self._scheduler = self.__init_scheduler(scheduler_type)
+
+            # transfer state to new scheduler
+            self._scheduler.initialize_from(self._system_state)
+
+        # CHANGE - log which scheduler will run the next placement operation
         self._logger.info(
-            "[%s] Running the scheduler with %s schedulable tasks and "
+            "[%s] Running the %s scheduler with %s schedulable tasks and "
             "%s tasks already placed across %s worker pools.",
             event.time.time,
+            scheduler_type.name,
             len(schedulable_tasks),
             len(currently_placed_tasks),
             len(self._worker_pools),
         )
         sched_finished_event = self.__run_scheduler(event)
+
+        # CHANGE - update the profiles based on the scheduler that was invoked and the observed 'quality' and 'runtime'
+
+        # toggle initial_invocation
+        if self._initial_invocation:
+            self._initial_invocation = False
+
         self._event_queue.add_event(sched_finished_event)
         self._logger.info(
             "[%s] Added %s to the event queue.",
@@ -2038,3 +2106,214 @@ class Simulator(object):
                     f"{worker_pool_resources.get_allocated_quantity(resource)},"
                     f"{worker_pool_resources.get_available_quantity(resource)}"
                 )
+
+    # CHANGE - updates metrics, currently only utilization
+    def __update_metrics(self, sim_time: EventTime):
+        """Updates the metrics like utilization of the resources of a particular WorkerPool.
+
+        Args:
+            sim_time (`EventTime`): The simulation time at which the utilization
+                is logged (in us).
+        """
+        assert (
+            sim_time.unit == EventTime.Unit.US
+        ), "The simulator time was not in microseconds."
+        
+        # utilization
+        # Cumulate the resources from all the WorkerPools
+        total_utilization = list()
+
+        for worker_pool in self._worker_pools.worker_pools:
+            pool_utilization = list()
+            
+            worker_pool_resources = worker_pool.resources
+            for resource_name in set(
+                map(lambda value: value[0].name, worker_pool_resources.resources)
+            ):
+                resource = Resource(name=resource_name, _id="any")
+                resource_utilization = dict(resource_name = resource_name, 
+                                   resource_allocation = worker_pool_resources.get_allocated_quantity(resource),
+                                   resource_availability = worker_pool_resources.get_available_quantity(resource))
+                pool_utilization.append(resource_utilization)
+
+            pool_utilization_dict = dict(worker_pool_id = f"{worker_pool.id}", utilization = pool_utilization)
+            total_utilization.append(pool_utilization_dict)
+
+        self._metric_manager._utilization = dict(utilization = total_utilization, sim_time = sim_time)
+
+    # CHANGE - initializes the scheduler object based on the enum returned by the switching policy
+    # how many of the params are state variables that have to be initialized from systems state?
+    def __init_scheduler(self, scheduler_type: SchedulerType):
+        if scheduler_type == SchedulerType.FIFO:
+            return FIFOScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                _flags=self._flags,
+            )
+
+        elif scheduler_type == SchedulerType.EDF:
+            return EDFScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                enforce_deadlines=self._flags.enforce_deadlines,
+                _flags=self._flags,
+            )
+
+        elif scheduler_type == SchedulerType.LSF:
+            return LSFScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                _flags=self._flags,
+            )
+
+        elif scheduler_type == SchedulerType.Z3:
+            return Z3Scheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                lookahead=EventTime(self._flags.scheduler_lookahead, EventTime.Unit.US),
+                enforce_deadlines=self._flags.enforce_deadlines,
+                policy= self._branch_prediction_policy,
+                branch_prediction_accuracy=self._flags.branch_prediction_accuracy,
+                retract_schedules=self._flags.retract_schedules,
+                release_taskgraphs=self._flags.release_taskgraphs,
+                goal=self._flags.ilp_goal,
+                _flags=self._flags,
+            )
+            
+        elif scheduler_type == SchedulerType.BranchPrediction:
+            return BranchPredictionScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                policy= self._branch_prediction_policy,
+                branch_prediction_accuracy=self._flags.branch_prediction_accuracy,
+                release_taskgraphs=self._flags.release_taskgraphs,
+                _flags=self._flags,
+            )
+
+        elif scheduler_type == SchedulerType.ILP:
+            return ILPScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                lookahead=EventTime(self._flags.scheduler_lookahead, EventTime.Unit.US),
+                enforce_deadlines=self._flags.enforce_deadlines,
+                policy= self._branch_prediction_policy,
+                branch_prediction_accuracy=self._flags.branch_prediction_accuracy,
+                retract_schedules=self._flags.retract_schedules,
+                release_taskgraphs=self._flags.release_taskgraphs,
+                goal=self._flags.ilp_goal,
+                batching=self._flags.scheduler_enable_batching,
+                time_limit=EventTime(self._flags.scheduler_time_limit, EventTime.Unit.S),
+                log_to_file=self._flags.scheduler_log_to_file,
+                _flags=self._flags,
+            )
+
+        elif scheduler_type == SchedulerType.TetriSched_CPLEX:
+            return TetriSchedCPLEXScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                lookahead=EventTime(self._flags.scheduler_lookahead, EventTime.Unit.US),
+                enforce_deadlines=self._flags.enforce_deadlines,
+                retract_schedules=self._flags.retract_schedules,
+                goal=self._flags.ilp_goal,
+                batching=self._flags.scheduler_enable_batching,
+                time_limit=EventTime(self._flags.scheduler_time_limit, EventTime.Unit.S),
+                time_discretization=EventTime(
+                    self._flags.scheduler_time_discretization, EventTime.Unit.US
+                ),
+                plan_ahead=EventTime(self._flags.scheduler_plan_ahead, EventTime.Unit.US),
+                log_to_file=self._flags.scheduler_log_to_file,
+                _flags=self._flags,
+            )
+
+        elif scheduler_type == SchedulerType.TetriSched_Gurobi:
+            return TetriSchedGurobiScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                lookahead=EventTime(self._flags.scheduler_lookahead, EventTime.Unit.US),
+                enforce_deadlines=self._flags.enforce_deadlines,
+                retract_schedules=self._flags.retract_schedules,
+                release_taskgraphs=self._flags.release_taskgraphs,
+                goal=self._flags.ilp_goal,
+                batching=self._flags.scheduler_enable_batching,
+                time_limit=EventTime(self._flags.scheduler_time_limit, EventTime.Unit.S),
+                time_discretization=EventTime(
+                    self._flags.scheduler_time_discretization, EventTime.Unit.US
+                ),
+                plan_ahead=EventTime(self._flags.scheduler_plan_ahead, EventTime.Unit.US),
+                log_to_file=self._flags.scheduler_log_to_file,
+                _flags=self._flags,
+            )
+
+        elif scheduler_type == SchedulerType.Clockwork:
+            return ClockworkScheduler(
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                goal=self._flags.clockwork_goal,
+                _flags=self._flags,
+            )
+
+        elif scheduler_type == SchedulerType.TetriSched:
+            finer_discretization = self._flags.finer_discretization_at_prev_solution
+            return TetriSchedScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                lookahead=EventTime(self._flags.scheduler_lookahead, EventTime.Unit.US),
+                enforce_deadlines=self._flags.enforce_deadlines,
+                retract_schedules=self._flags.retract_schedules,
+                release_taskgraphs=self._flags.release_taskgraphs,
+                goal=self._flags.ilp_goal,
+                time_discretization=EventTime(
+                    self._flags.scheduler_time_discretization, EventTime.Unit.US
+                ),
+                plan_ahead=EventTime(self._flags.scheduler_plan_ahead, EventTime.Unit.US),
+                log_to_file=self._flags.scheduler_log_to_file,
+                adaptive_discretization=self._flags.scheduler_adaptive_discretization,
+                _flags=self._flags,
+                max_time_discretization=EventTime(
+                    self._flags.scheduler_max_time_discretization, EventTime.Unit.US
+                ),
+                max_occupancy_threshold=self._flags.scheduler_max_occupancy_threshold,
+                finer_discretization_at_prev_solution=finer_discretization,
+                finer_discretization_window=EventTime(
+                    self._flags.finer_discretization_window, EventTime.Unit.US
+                ),
+                plan_ahead_no_consideration_gap=EventTime(
+                    self._flags.scheduler_plan_ahead_no_consideration_gap, EventTime.Unit.US
+                ),
+            )
+
+        elif scheduler_type == SchedulerType.GraphenePrime:
+            return TetriSchedScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                lookahead=EventTime(self._flags.scheduler_lookahead, EventTime.Unit.US),
+                # Graphene does not have a notion of deadlines.
+                enforce_deadlines=False,
+                retract_schedules=self._flags.retract_schedules,
+                # Graphene is a DAG-aware scheduler.
+                release_taskgraphs=True,
+                # Graphene is a min-makespan scheduler.
+                goal="min_placement_delay",
+                time_discretization=EventTime(
+                    self._flags.scheduler_time_discretization, EventTime.Unit.US
+                ),
+                plan_ahead=EventTime(self._flags.scheduler_plan_ahead, EventTime.Unit.US),
+                log_to_file=self._flags.scheduler_log_to_file,
+                _flags=self._flags,
+            )
+            
+        elif scheduler_type == SchedulerType.Graphene:
+            return GrapheneScheduler(
+                preemptive=self._flags.preemption,
+                runtime=EventTime(self._flags.scheduler_runtime, EventTime.Unit.US),
+                lookahead=EventTime(self._flags.scheduler_lookahead, EventTime.Unit.US),
+                retract_schedules=self._flags.retract_schedules,
+                goal=self._flags.ilp_goal,
+                time_discretization=EventTime(
+                    self._flags.scheduler_time_discretization, EventTime.Unit.US
+                ),
+                plan_ahead=EventTime(self._flags.scheduler_plan_ahead, EventTime.Unit.US),
+                log_to_file=self._flags.scheduler_log_to_file,
+                _flags=self._flags,
+            )
+
+            

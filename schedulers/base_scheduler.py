@@ -219,6 +219,10 @@ class BaseScheduler(object):
         raise NotImplementedError(
             "The `schedule()` method has not been " "implemented."
         )
+    
+    # CHANGE - defines the state switch method - has to be implemented hand-in-hand with statelessness
+    def initialize_from(self, system_state):
+        pass
 
     def log(self):
         raise NotImplementedError("The `log()` method has not been implemented.")
