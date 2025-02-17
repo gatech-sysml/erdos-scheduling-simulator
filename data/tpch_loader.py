@@ -30,9 +30,9 @@ from .base_workload_loader import BaseWorkloadLoader
 
 
 class TpchQueryDifficulty(Enum):
-    easy = {1, 3, 4, 6, 12, 14, 17, 19, 22}
-    medium = {10, 11, 13, 15, 16, 18, 20}
-    hard = {2, 7, 8, 9, 21}
+    easy = {16, 13, 22}
+    medium = {2, 6, 11, 12, 14, 15, 19, 20}
+    hard = {1, 3, 4, 5, 7, 8, 9, 10, 17, 18, 21}
 
 
 class TpchLoader:

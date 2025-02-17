@@ -364,6 +364,17 @@ class Workload(object):
                 )
         return cancelled_task_graphs
 
+    def calculate_slo(self) -> float:
+        # heuristic to clip the ramp up and ramp down period; don't
+        # count the first and last 10 taskgraphs
+        task_graphs = list(self._task_graphs.values())[10:-10]
+        if not task_graphs:
+            return 0
+        met = sum(1 for task_graph in task_graphs
+                  if task_graph.is_complete() and
+                  task_graph.completion_time <= task_graph.deadline)
+        return met / len(task_graphs)
+
     def __len__(self) -> int:
         """Returns the total number of Tasks in the Workload."""
         total_tasks = 0

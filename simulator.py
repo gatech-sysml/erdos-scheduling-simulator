@@ -2232,5 +2232,6 @@ class Simulator(object):
             f"{self._cancelled_tasks},{self._missed_task_deadlines},"
             f"{self._finished_task_graphs},"
             f"{len(self._workload.get_cancelled_task_graphs())},"
-            f"{self._missed_task_graph_deadlines}"
+            f"{self._missed_task_graph_deadlines},"
+            f"{self._workload.calculate_slo()}"
         )
