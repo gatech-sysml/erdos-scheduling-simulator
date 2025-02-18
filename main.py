@@ -170,6 +170,14 @@ flags.DEFINE_integer(
     8,
     "Minimum runtime of a TPC-H task",
 )
+flags.DEFINE_string(
+    "tpch_query_partitioning",
+    "",
+    "Partition TPCH queries into buckets, each of which may be assigned a "
+    "number of invocations and a Poisson arrival rate. Buckets are delimited "
+    "by colons, and each bucket is a comma-delimited sequence of integers "
+    "identifying the query numbers for that bucket."
+)
 
 # AlibabaLoader related flags.
 flags.DEFINE_integer(
