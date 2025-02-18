@@ -5,6 +5,7 @@ import subprocess
 import shutil
 import random
 import math
+from datetime import date
 
 
 from pathlib import Path
@@ -163,27 +164,14 @@ def generate_search_space():
         "med_ar_weight": tune.uniform(0, 1),
         "hard_ar_weight": tune.uniform(0, 1),
 
-        "arrival_rate": tune.uniform(0.01, 0.055),
-        "invocations": 200,
+        "arrival_rate": tune.uniform(0.022, 0.052),
+        "invocations": 220,
 
         "tpch_max_executors_per_job": 75,
         "tpch_dataset_size": 250,
+
+        "partitioning": "2,11,13,16,19,22:1,6,7,10,12,14,15,20:3,4,5,8,9,17,18,21",
     }
-
-
-# def is_valid_config(config, ar, num_invocations):
-#     return all([
-#         config["override_num_invocations_easy"]
-#         + config["override_num_invocations_med"]
-#         + config["override_num_invocations_hard"]
-#         == num_invocations,
-#         np.isclose(
-#             config["override_poisson_arrival_rate_easy"]
-#             + config["override_poisson_arrival_rate_med"]
-#             + config["override_poisson_arrival_rate_hard"],
-#             ar,
-#         ),
-#     ])
 
 
 def objective(config, experiment_dir):
@@ -229,6 +217,8 @@ def objective(config, experiment_dir):
 
         f'--tpch_dataset_size={config["tpch_dataset_size"]}',
         f'--tpch_max_executors_per_job={config["tpch_max_executors_per_job"]}',
+
+        f'--tpch_query_partitioning={config["partitioning"]}',
     ]
 
     flags = [*base_flags, *config_specific_flags]
@@ -265,11 +255,11 @@ def objective(config, experiment_dir):
 # - generate_search_space config space
 
 def main():
-    num_samples = 1000
+    num_samples = 3000
     # num_cores_per_trial = 2
     # max_concurrent_trials = 4
     search_space = generate_search_space()
-    exp_name = "config-search-215"
+    exp_name = f"config-search-{date.today().isoformat()}"
 
     ray.init(num_cpus=14)
 
