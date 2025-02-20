@@ -794,7 +794,7 @@ def log_detailed_task_statistics(
                         ),
                         (
                             task.timestamp,
-                            str(task.id),
+                            str(task.task_id),
                             (
                                 task.intended_release_time / 1000
                                 if task.intended_release_time != -1
