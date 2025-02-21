@@ -269,7 +269,7 @@ class Simulator(object):
         worker_pools: WorkerPools,
         # CHANGE - receive the scheduler_switching_mode and the scheduler_switching_policy
         scheduler_switching_policy: SchedulerSwitchingPolicy,
-        enable_dynamic__scheduler_switching: bool,
+        enable_dynamic_scheduler_switching: bool,
         scheduler: BaseScheduler,
         workload_loader: BaseWorkloadLoader,
         branch_prediction_policy: BranchPredictionPolicy,
@@ -337,7 +337,7 @@ class Simulator(object):
         self._task_id_added_to_event_queue = set()
 
         # CHANGE - define boolean that defines if scheduler should switch dynamically
-        self._enable_dynamic_scheduler_switching = enable_dynamic__scheduler_switching
+        self._enable_dynamic_scheduler_switching = enable_dynamic_scheduler_switching
 
         # CHANGE - define boolean that tracks if this is the first scheduler invocation
         self._initial_invocation = True
@@ -594,6 +594,7 @@ class Simulator(object):
             # switch the scheduling object based on user-defined policy
             scheduler_type = self._scheduler_switching_policy.pick_scheduler(metrics=metrics, 
                                         profiles=profiles, initial_invocation=self._initial_invocation)
+            
             self._scheduler = self.__init_scheduler(scheduler_type)
 
             # transfer state to new scheduler
@@ -2136,7 +2137,7 @@ class Simulator(object):
                                    resource_availability = worker_pool_resources.get_available_quantity(resource))
                 pool_utilization.append(resource_utilization)
 
-            pool_utilization_dict = dict(worker_pool_id = f"{worker_pool.id}", utilization = pool_utilization)
+            pool_utilization_dict = dict(worker_pool_id = f"{worker_pool.id}", pool_utilization = pool_utilization)
             total_utilization.append(pool_utilization_dict)
 
         self._metric_manager._utilization = dict(utilization = total_utilization, sim_time = sim_time)

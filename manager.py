@@ -194,8 +194,8 @@ class MetricManager():
         allocated_resources = 0
         available_resources = 0
 
-        for pool_utilization in self._utilization:
-            for res_utilization in pool_utilization:
+        for pool_utilization in self._utilization["utilization"]:
+            for res_utilization in pool_utilization["pool_utilization"]:
                 allocated_resources += res_utilization["resource_allocation"]
                 available_resources += res_utilization["resource_availability"]
 

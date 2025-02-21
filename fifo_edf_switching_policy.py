@@ -2,7 +2,7 @@ from scheduler_types import SchedulerType
 from scheduler_switching_policy import SchedulerSwitchingPolicy
 
 class FifoEdfSwitchingPolicy(SchedulerSwitchingPolicy):
-    def pick_scheduler(self, metrics, profiles=None, initial_invocation=True) -> SchedulerType:
+    def pick_scheduler(self, metrics, profiles=None, initial_invocation=False) -> SchedulerType:
         """
         Returns the name of the next scheduler to switch to.
 
@@ -13,12 +13,13 @@ class FifoEdfSwitchingPolicy(SchedulerSwitchingPolicy):
         Returns:
             SchedulerType: Enum representing next scheduler 
         """
+
         if(initial_invocation):
             return SchedulerType.FIFO
         
         if(metrics["utilization"] <= 0.25 or (metrics["utilization"] > 0.5 and metrics["utilization"] < 0.75)):
-            return SchedulerType.FIFO
+            return SchedulerType.EDF
         
         else:
-            return SchedulerType.EDF
+            return SchedulerType.FIFO
             
