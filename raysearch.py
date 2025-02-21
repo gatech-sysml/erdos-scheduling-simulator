@@ -164,7 +164,7 @@ def generate_search_space():
         "med_ar_weight": tune.uniform(0, 1),
         "hard_ar_weight": tune.uniform(0, 1),
 
-        "arrival_rate": tune.uniform(0.022, 0.052),
+        "arrival_rate": tune.uniform(0.022, 0.055),
         "invocations": 220,
 
         "tpch_max_executors_per_job": 75,
@@ -227,12 +227,10 @@ def objective(config, experiment_dir):
     dsched_slo, dsched_analysis = run_dsched(output_dir, flags)
 
     metric = (
-        (150 * math.log(dsched_slo / 0.8) if dsched_slo < 0.8 else 0) # penalize for dsched going below 80%
+        150 * math.log(dsched_slo / 0.8) # penalize for dsched going below 80%
         + 2 * (dsched_slo - edf_slo)  # maximize slo difference, weighted by 2
         + (edf_analysis["avg"] - edf_analysis["eff"])  # maximize util difference in edf
-        + (
-            dsched_analysis["eff"] - dsched_analysis["avg"]
-        )  # minimum util difference in dsched
+        + dsched_analysis["eff"] # maximize effective util in dsched
     )
 
     result = {
@@ -255,7 +253,7 @@ def objective(config, experiment_dir):
 # - generate_search_space config space
 
 def main():
-    num_samples = 3000
+    num_samples = 2000
     # num_cores_per_trial = 2
     # max_concurrent_trials = 4
     search_space = generate_search_space()
