@@ -1,11 +1,9 @@
 from scheduler_utils import SchedulerType
-from simulator import Simulator
 from workload import Resource
 from utils import EventTime
 
 class ProfileManager():
-    def __init__(self, simulator: Simulator):
-        self._simulator = simulator
+    def __init__(self):
         self._scheduler_stats = dict()
 
     def get_profile(self, scheduler_type: SchedulerType):
@@ -33,8 +31,7 @@ class ProfileManager():
     
 
 class MetricManager():
-    def __init__(self, simulator: Simulator):
-        self._simulator = simulator
+    def __init__(self):
         self._utilization = dict(utilization = None, sim_time = 0)
 
     @property
@@ -45,7 +42,7 @@ class MetricManager():
     def utilization(self, utilization):
         self._utilization = utilization
 
-    def update_metrics(self, sim_time: EventTime):
+    def update_metrics(self, simulator, sim_time: EventTime):
         """Updates the metrics like utilization of the resources of a particular WorkerPool.
 
         Args:
@@ -60,7 +57,7 @@ class MetricManager():
         # Cumulate the resources from all the WorkerPools
         total_utilization = list()
 
-        for worker_pool in self._simulator._worker_pools.worker_pools:
+        for worker_pool in simulator._worker_pools.worker_pools:
             pool_utilization = list()
             
             worker_pool_resources = worker_pool.resources

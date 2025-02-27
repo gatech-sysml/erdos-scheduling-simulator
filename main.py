@@ -797,10 +797,10 @@ def main(args):
     # Instantiate the scheduler based on the given flag.
     scheduler = None
 
-    add_args = dict()
-    add_args["flags"] = FLAGS
-    add_args["logger"] = logger
-    add_args["branch_prediction_policy"] = branch_prediction_policy
+    args = dict()
+    args["flags"] = FLAGS
+    args["logger"] = logger
+    args["branch_prediction_policy"] = branch_prediction_policy
 
     if FLAGS.scheduler == "FIFO":
         scheduler = instantiate_scheduler(SchedulerType.FIFO, args)

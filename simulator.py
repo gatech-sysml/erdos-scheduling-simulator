@@ -334,8 +334,8 @@ class Simulator(object):
 
         self._initial_invocation = True
 
-        self._profile_manager = ProfileManager(self)
-        self._metric_manager = MetricManager(self)
+        self._profile_manager = ProfileManager()
+        self._metric_manager = MetricManager()
 
         # define the switching policy user-defined class
         self._scheduler_switching_policy = scheduler_switching_policy
@@ -567,7 +567,7 @@ class Simulator(object):
         )
         self.__log_utilization(event.time)
 
-        self._metric_manager.update_metrics(event.time)
+        self._metric_manager.update_metrics(self, event.time)
 
         # Execute the scheduler, and insert an event notifying the
         # end of the scheduler into the loop.
