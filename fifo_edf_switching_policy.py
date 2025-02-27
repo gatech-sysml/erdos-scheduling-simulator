@@ -1,4 +1,4 @@
-from scheduler_types import SchedulerType
+from scheduler_utils import SchedulerType
 from scheduler_switching_policy import SchedulerSwitchingPolicy
 
 class FifoEdfSwitchingPolicy(SchedulerSwitchingPolicy):

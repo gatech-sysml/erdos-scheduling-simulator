@@ -2,13 +2,13 @@ import os
 import random
 import sys
 
-# CHANGE - imports for checking if class implements interface
 import importlib
 import inspect
 from typing import Type
 
-# CHANGE - import switching policy interface
 from scheduler_switching_policy import SchedulerSwitchingPolicy
+
+from scheduler_utils import SchedulerType, instantiate_scheduler
 
 from absl import app, flags
 
@@ -306,7 +306,6 @@ flags.DEFINE_bool(
     "reached their release time.",
 )
 
-# CHANGE - define the flag for scheduler_switching_mode
 flags.DEFINE_enum(
     "scheduler_switching_mode",
     "static",
@@ -336,7 +335,6 @@ flags.DEFINE_enum(
     "The scheduler to use for this execution.",
 )
 
-# CHANGE - define the path to the user-defined class for switching policy
 flags.DEFINE_string(
     "scheduler_switching_policy",
     "",
@@ -625,7 +623,6 @@ flags.DEFINE_integer(
     "used for multiple JobGraphs.",
 )
 
-# CHANGE - defines the method to check if switching policy class implements the interface
 def load_policy_class(path: str) -> Type[SchedulerSwitchingPolicy]:
     # Ensure the path ends with .py
     if not path.endswith('.py'):
@@ -782,7 +779,6 @@ def main(args):
             f"The policy {FLAGS.scheduler_policy} is not supported."
         )
     
-    # CHANGE - define the scheduler_switching_mode
     if FLAGS.scheduler_switching_mode == "dynamic":
         enable_dynamic_scheduler_switching = True
         if not FLAGS.scheduler_switching_policy:
@@ -801,204 +797,47 @@ def main(args):
     # Instantiate the scheduler based on the given flag.
     scheduler = None
 
+    add_args = dict()
+    add_args["flags"] = FLAGS
+    add_args["logger"] = logger
+    add_args["branch_prediction_policy"] = branch_prediction_policy
+
     if FLAGS.scheduler == "FIFO":
-        from schedulers import FIFOScheduler
+        scheduler = instantiate_scheduler(SchedulerType.FIFO, args)
 
-        scheduler = FIFOScheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            _flags=FLAGS,
-        )
     elif FLAGS.scheduler == "EDF":
-        from schedulers import EDFScheduler
+        scheduler = instantiate_scheduler(SchedulerType.EDF, args)
 
-        scheduler = EDFScheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            enforce_deadlines=FLAGS.enforce_deadlines,
-            _flags=FLAGS,
-        )
     elif FLAGS.scheduler == "LSF":
-        from schedulers import LSFScheduler
-
-        scheduler = LSFScheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            _flags=FLAGS,
-        )
+        scheduler = instantiate_scheduler(SchedulerType.LSF, args)
+        
     elif FLAGS.scheduler == "Z3":
-        from schedulers import Z3Scheduler
-
-        scheduler = Z3Scheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            lookahead=EventTime(FLAGS.scheduler_lookahead, EventTime.Unit.US),
-            enforce_deadlines=FLAGS.enforce_deadlines,
-            policy=branch_prediction_policy,
-            branch_prediction_accuracy=FLAGS.branch_prediction_accuracy,
-            retract_schedules=FLAGS.retract_schedules,
-            release_taskgraphs=FLAGS.release_taskgraphs,
-            goal=FLAGS.ilp_goal,
-            _flags=FLAGS,
-        )
+        scheduler = instantiate_scheduler(SchedulerType.Z3, args)
+        
     elif FLAGS.scheduler == "BranchPrediction":
-        from schedulers import BranchPredictionScheduler
-
-        scheduler = BranchPredictionScheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            policy=branch_prediction_policy,
-            branch_prediction_accuracy=FLAGS.branch_prediction_accuracy,
-            release_taskgraphs=FLAGS.release_taskgraphs,
-            _flags=FLAGS,
-        )
+        scheduler = instantiate_scheduler(SchedulerType.BranchPrediction, args)
+        
     elif FLAGS.scheduler == "ILP":
-        from schedulers import ILPScheduler
-
-        scheduler = ILPScheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            lookahead=EventTime(FLAGS.scheduler_lookahead, EventTime.Unit.US),
-            enforce_deadlines=FLAGS.enforce_deadlines,
-            policy=branch_prediction_policy,
-            branch_prediction_accuracy=FLAGS.branch_prediction_accuracy,
-            retract_schedules=FLAGS.retract_schedules,
-            release_taskgraphs=FLAGS.release_taskgraphs,
-            goal=FLAGS.ilp_goal,
-            batching=FLAGS.scheduler_enable_batching,
-            time_limit=EventTime(FLAGS.scheduler_time_limit, EventTime.Unit.S),
-            log_to_file=FLAGS.scheduler_log_to_file,
-            _flags=FLAGS,
-        )
+        scheduler = instantiate_scheduler(SchedulerType.ILP, args)
+        
     elif FLAGS.scheduler == "TetriSched_CPLEX":
-        from schedulers import TetriSchedCPLEXScheduler
-
-        scheduler = TetriSchedCPLEXScheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            lookahead=EventTime(FLAGS.scheduler_lookahead, EventTime.Unit.US),
-            enforce_deadlines=FLAGS.enforce_deadlines,
-            retract_schedules=FLAGS.retract_schedules,
-            goal=FLAGS.ilp_goal,
-            batching=FLAGS.scheduler_enable_batching,
-            time_limit=EventTime(FLAGS.scheduler_time_limit, EventTime.Unit.S),
-            time_discretization=EventTime(
-                FLAGS.scheduler_time_discretization, EventTime.Unit.US
-            ),
-            plan_ahead=EventTime(FLAGS.scheduler_plan_ahead, EventTime.Unit.US),
-            log_to_file=FLAGS.scheduler_log_to_file,
-            _flags=FLAGS,
-        )
+        scheduler = instantiate_scheduler(SchedulerType.TetriSched_CPLEX, args)
+        
     elif FLAGS.scheduler == "TetriSched_Gurobi":
-        from schedulers import TetriSchedGurobiScheduler
-
-        scheduler = TetriSchedGurobiScheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            lookahead=EventTime(FLAGS.scheduler_lookahead, EventTime.Unit.US),
-            enforce_deadlines=FLAGS.enforce_deadlines,
-            retract_schedules=FLAGS.retract_schedules,
-            release_taskgraphs=FLAGS.release_taskgraphs,
-            goal=FLAGS.ilp_goal,
-            batching=FLAGS.scheduler_enable_batching,
-            time_limit=EventTime(FLAGS.scheduler_time_limit, EventTime.Unit.S),
-            time_discretization=EventTime(
-                FLAGS.scheduler_time_discretization, EventTime.Unit.US
-            ),
-            plan_ahead=EventTime(FLAGS.scheduler_plan_ahead, EventTime.Unit.US),
-            log_to_file=FLAGS.scheduler_log_to_file,
-            _flags=FLAGS,
-        )
+        scheduler = instantiate_scheduler(SchedulerType.TetriSched_Gurobi, args)
+        
     elif FLAGS.scheduler == "Clockwork":
-        from schedulers import ClockworkScheduler
-
-        scheduler = ClockworkScheduler(
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            goal=FLAGS.clockwork_goal,
-            _flags=FLAGS,
-        )
+        scheduler = instantiate_scheduler(SchedulerType.Clockwork, args)
+        
     elif FLAGS.scheduler == "TetriSched":
-        from schedulers import TetriSchedScheduler
-
-        finer_discretization = FLAGS.finer_discretization_at_prev_solution
-        scheduler = TetriSchedScheduler(
-            preemptive=FLAGS.preemption,
-            runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-            lookahead=EventTime(FLAGS.scheduler_lookahead, EventTime.Unit.US),
-            enforce_deadlines=FLAGS.enforce_deadlines,
-            retract_schedules=FLAGS.retract_schedules,
-            release_taskgraphs=FLAGS.release_taskgraphs,
-            goal=FLAGS.ilp_goal,
-            time_discretization=EventTime(
-                FLAGS.scheduler_time_discretization, EventTime.Unit.US
-            ),
-            plan_ahead=EventTime(FLAGS.scheduler_plan_ahead, EventTime.Unit.US),
-            log_to_file=FLAGS.scheduler_log_to_file,
-            adaptive_discretization=FLAGS.scheduler_adaptive_discretization,
-            _flags=FLAGS,
-            max_time_discretization=EventTime(
-                FLAGS.scheduler_max_time_discretization, EventTime.Unit.US
-            ),
-            max_occupancy_threshold=FLAGS.scheduler_max_occupancy_threshold,
-            finer_discretization_at_prev_solution=finer_discretization,
-            finer_discretization_window=EventTime(
-                FLAGS.finer_discretization_window, EventTime.Unit.US
-            ),
-            plan_ahead_no_consideration_gap=EventTime(
-                FLAGS.scheduler_plan_ahead_no_consideration_gap, EventTime.Unit.US
-            ),
-        )
+        scheduler = instantiate_scheduler(SchedulerType.TetriSched, args)
+        
     elif FLAGS.scheduler == "GraphenePrime":
-        try:
-            from schedulers import TetriSchedScheduler
-
-            scheduler = TetriSchedScheduler(
-                preemptive=FLAGS.preemption,
-                runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-                lookahead=EventTime(FLAGS.scheduler_lookahead, EventTime.Unit.US),
-                # Graphene does not have a notion of deadlines.
-                enforce_deadlines=False,
-                retract_schedules=FLAGS.retract_schedules,
-                # Graphene is a DAG-aware scheduler.
-                release_taskgraphs=True,
-                # Graphene is a min-makespan scheduler.
-                goal="min_placement_delay",
-                time_discretization=EventTime(
-                    FLAGS.scheduler_time_discretization, EventTime.Unit.US
-                ),
-                plan_ahead=EventTime(FLAGS.scheduler_plan_ahead, EventTime.Unit.US),
-                log_to_file=FLAGS.scheduler_log_to_file,
-                _flags=FLAGS,
-            )
-        except ImportError:
-            logger.error(
-                "Unable to import TetriSchedScheduler. "
-                "Make sure you've compiled the TetriSched C++ backend."
-            )
-            raise RuntimeError("TetriSchedScheduler not available.")
+        scheduler = instantiate_scheduler(SchedulerType.GraphenePrime, args)
+        
     elif FLAGS.scheduler == "Graphene":
-        try:
-            from schedulers import GrapheneScheduler
-
-            scheduler = GrapheneScheduler(
-                preemptive=FLAGS.preemption,
-                runtime=EventTime(FLAGS.scheduler_runtime, EventTime.Unit.US),
-                lookahead=EventTime(FLAGS.scheduler_lookahead, EventTime.Unit.US),
-                retract_schedules=FLAGS.retract_schedules,
-                goal=FLAGS.ilp_goal,
-                time_discretization=EventTime(
-                    FLAGS.scheduler_time_discretization, EventTime.Unit.US
-                ),
-                plan_ahead=EventTime(FLAGS.scheduler_plan_ahead, EventTime.Unit.US),
-                log_to_file=FLAGS.scheduler_log_to_file,
-                _flags=FLAGS,
-            )
-        except ImportError:
-            logger.error(
-                "Unable to import GrapheneScheduler. "
-                "Make sure you've compiled the TetriSched C++ backend."
-            )
-            raise RuntimeError("GrapheneScheduler not available.")
+        scheduler = instantiate_scheduler(SchedulerType.Graphene, args)
+        
     else:
         raise ValueError(
             "Unsupported scheduler implementation: {}".format(FLAGS.scheduler)
@@ -1022,15 +861,14 @@ def main(args):
     # Create and run the Simulator based on the scheduler.
     simulator = Simulator(
         worker_pools=worker_loader.get_worker_pools(),
-        # CHANGE - send the scheduler_switching_mode and the scheduler_switching_policy
         scheduler_switching_policy=scheduler_switching_policy,
         enable_dynamic_scheduler_switching=enable_dynamic_scheduler_switching,
         scheduler=scheduler,
         workload_loader=workload_loader,
         loop_timeout=EventTime(FLAGS.loop_timeout, EventTime.Unit.US),
         scheduler_frequency=EventTime(FLAGS.scheduler_frequency, EventTime.Unit.US),
-        # CHANGE - send branch_prediction_policy to initialize schedulers in simulator
         branch_prediction_policy=branch_prediction_policy,
+        logger=logger,
         _flags=FLAGS,
     )
     if FLAGS.dry_run:

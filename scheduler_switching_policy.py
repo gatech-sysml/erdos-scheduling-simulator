@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from scheduler_types import SchedulerType
+from scheduler_utils import SchedulerType
 
 class SchedulerSwitchingPolicy(ABC):
     """Interface for defining a scheduler switching policy."""
