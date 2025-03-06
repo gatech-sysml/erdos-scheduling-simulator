@@ -593,21 +593,31 @@ class Simulator(object):
             # transfer state to new scheduler
             self._scheduler.initialize_from(self._system_state)
 
-        self._logger.info(
-            "[%s] Running the %s scheduler with %s schedulable tasks and "
-            "%s tasks already placed across %s worker pools.",
-            event.time.time,
-            scheduler_type.name,
-            len(schedulable_tasks),
-            len(currently_placed_tasks),
-            len(self._worker_pools),
-        )
+            self._logger.info(
+                "[%s] Running the %s scheduler with %s schedulable tasks and "
+                "%s tasks already placed across %s worker pools.",
+                event.time.time,
+                scheduler_type.name,
+                len(schedulable_tasks),
+                len(currently_placed_tasks),
+                len(self._worker_pools),
+            )
+
+            # toggle initial_invocation
+            if self._initial_invocation:
+                self._initial_invocation = False
+
+        else:
+            self._logger.info(
+                "[%s] Running the scheduler with %s schedulable tasks and "
+                "%s tasks already placed across %s worker pools.",
+                event.time.time,
+                len(schedulable_tasks),
+                len(currently_placed_tasks),
+                len(self._worker_pools),
+            )   
+
         sched_finished_event = self.__run_scheduler(event)
-
-
-        # toggle initial_invocation
-        if self._initial_invocation:
-            self._initial_invocation = False
 
         self._event_queue.add_event(sched_finished_event)
         self._logger.info(
