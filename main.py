@@ -190,6 +190,11 @@ flags.DEFINE_string(
     "by colons, and each bucket is a comma-delimited sequence of integers "
     "identifying the query numbers for that bucket."
 )
+flags.DEFINE_string(
+    "tpch_workload_spec",
+    "",
+    "Path to a JSON file specifying the TPC-H workload to run the simulator against",
+)
 
 # AlibabaLoader related flags.
 flags.DEFINE_integer(
@@ -656,13 +661,8 @@ def main(args):
     logger.info("Workload File: %s", FLAGS.workload_profile_path)
     logger.info("Workers File: %s", FLAGS.worker_profile_path)
 
-    csv_logger = setup_csv_logging(
-        name=__name__,
-        log_dir=FLAGS.log_dir,
-        log_file=FLAGS.csv_file_name,
-    )
     for flag_name in FLAGS:
-        csv_logger.debug(f"input_flag,{flag_name},{getattr(FLAGS, flag_name)}")
+        logger.info(f"Command-line flag: {flag_name}: {getattr(FLAGS, flag_name)}")
 
     # Load the data.
     if FLAGS.execution_mode == "replay":
