@@ -96,7 +96,7 @@ def generate_experiment_matrix(config: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Simple list - wrap each value as a single-item list for consistency
             param_value_sets.append([[v] for v in values])
 
-    def format_flag_value(flag_value: Any, delim=',') -> str:
+    def format_flag_value(flag_value: Any, delim=",") -> str:
         if isinstance(flag_value, list):
             # Join list values with comma
             values_str = delim.join(map(str, flag_value))
@@ -160,14 +160,14 @@ def generate_experiment_matrix(config: Dict[str, Any]) -> List[Dict[str, Any]]:
             param_dict = {}
             for param_name, param_value in zip(param_names, param_set_combination):
                 experiment["flags"].extend(format_flag(param_name, param_value))
-                param_dict[param_name] = format_flag_value(param_value, delim='~')
+                param_dict[param_name] = format_flag_value(param_value, delim="~")
 
             # Set experiment name using the param_dict
-            name = config["naming"].format(
-                scheduler=scheduler["name"], **param_dict
-            )
-            if ',' in name:
-                raise ValueError(f"Invalid experiment name '{name}'. Must not contain ','")
+            name = config["naming"].format(scheduler=scheduler["name"], **param_dict)
+            if "," in name:
+                raise ValueError(
+                    f"Invalid experiment name '{name}'. Must not contain ','"
+                )
             experiment["name"] = name
 
             experiments.append(experiment)
@@ -178,22 +178,22 @@ def generate_experiment_matrix(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 def run_job(experiment: Dict[str, Any], output_dir: Path):
     try:
         result = run_and_analyze(
-            label=experiment['name'],
+            label=experiment["name"],
             output_dir=output_dir,
-            flags=experiment['flags'],
+            flags=experiment["flags"],
         )
         return {
-            'experiment': experiment,
-            'result': result,
+            "experiment": experiment,
+            "result": result,
         }
     except Exception as e:
         print(f"Failed to run {experiment}")
         print("Exception:", e)
         print(traceback.format_exc())
         return {
-            'experiment': experiment,
-            'error': {
-                'traceback': traceback.format_exc(),
+            "experiment": experiment,
+            "error": {
+                "traceback": traceback.format_exc(),
             },
         }
 
@@ -205,33 +205,41 @@ class InvalidOutputDirectoryException(Exception):
 def prepare_output_directory(output_dir: Path):
     if output_dir.exists():
         while True:
-            user_input = input(f"'{output_dir.resolve()}' already exists. Do you want to delete it? (y/n): ").lower().strip()
+            user_input = (
+                input(
+                    f"'{output_dir.resolve()}' already exists. Do you want to delete it? (y/n): "
+                )
+                .lower()
+                .strip()
+            )
 
-            if user_input == 'y':
+            if user_input == "y":
                 shutil.rmtree(output_dir)
                 print(f"Directory '{output_dir}' has been deleted.")
                 break
-            elif user_input == 'n':
-                raise InvalidOutputDirectoryException(f"Output directory already exists")
+            elif user_input == "n":
+                raise InvalidOutputDirectoryException(
+                    f"Output directory already exists"
+                )
             else:
                 print("Please enter 'y' for yes or 'n' for no.")
 
     output_dir.mkdir(parents=True)
 
 
-def run_experiment(experiment: List[Dict[str, Any]], output_dir: Path, num_workers: int):
+def run_experiment(
+    experiment: List[Dict[str, Any]], output_dir: Path, num_workers: int
+):
     def task(job):
         return run_job(job, output_dir)
 
     prepare_output_directory(output_dir)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-        results = list(
-            tqdm(executor.map(task, experiment), total=len(experiment))
-        )
+        results = list(tqdm(executor.map(task, experiment), total=len(experiment)))
 
     df = pd.json_normalize(results)
-    with open(output_dir / 'results.csv', 'w') as f:
+    with open(output_dir / "results.csv", "w") as f:
         df.to_csv(f, index=False)
 
     print(df)
@@ -284,12 +292,16 @@ def main():
 
         return
 
-    print(f"Running experiment config '{args.config}' ({len(experiment)} jobs with {args.num_workers} workers).")
+    print(
+        f"Running experiment config '{args.config}' ({len(experiment)} jobs with {args.num_workers} workers)."
+    )
     print(f"Dumping output to '{args.output_dir.resolve()}'")
 
     try:
         run_experiment(experiment, args.output_dir, args.num_workers)
-        print(f"Successfully ran experiment. Results are available at '{args.output_dir.resolve()}'")
+        print(
+            f"Successfully ran experiment. Results are available at '{args.output_dir.resolve()}'"
+        )
     except InvalidOutputDirectoryException as e:
         print(f"Failed to run experiment. Reason: {e}")
     except Exception as e:
